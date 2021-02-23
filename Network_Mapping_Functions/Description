@@ -1,0 +1,1 @@
+This directory contains mapping functions for moving network data in and out of network, igraph, and independent platforms such as Pajek, ORA, and UCINET.
