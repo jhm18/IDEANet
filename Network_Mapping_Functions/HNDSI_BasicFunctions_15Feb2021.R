@@ -79,9 +79,6 @@ base_data <- import_data('ahs_wpvar')
 # Focusing on Community One for Demonstration Purposes
   community_1 <- communities_edgelist[[1]]
   
-# Converting the Community 1 network into an Adjacency List for Testing
-  adj_matrix <- network::as.matrix(network,matrix.type="adjacency")
-
 ################
 #   netwrite   #
 ################
@@ -94,9 +91,10 @@ base_data <- import_data('ahs_wpvar')
 # Currently Supported Packages (Will Add Pajek, ORA, UCINet, etc)
   support_packages <- c('igraph', 'network')
   
-netwrite <- function(adjacency=FALSE, adjacency_matrix=FALSE, nodelist=FALSE, 
+  netwrite <- function(adjacency=FALSE, adjacency_matrix=FALSE,
+                     nodelist=FALSE, 
                      weights=FALSE, i_elements, j_elements, package='igraph', missing_code=99999, 
-                     weight_type='frequency', directed='TRUE', net_name='network') {
+                     weight_type='frequency', directed=TRUE, net_name='network') {
   # Installing Necessary Packages 
     list.of.packages <- c('dplyr')
     new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
@@ -107,10 +105,10 @@ netwrite <- function(adjacency=FALSE, adjacency_matrix=FALSE, nodelist=FALSE,
     if (adjacency == TRUE) {
       adj_matrix <- adjacency_matrix
       if (dim(adj_matrix)[[1]] != dim(adj_matrix)[[2]]){
-        test <- adj_matrix[,c(2:ncol(adj_matrix))]
+        adj_matrix <- adj_matrix[,c(2:ncol(adj_matrix))]
       }else{
-        adj_matrix <- adj_matrix[,]
-      }
+       adj_matrix <- adj_matrix[,]
+      }    
       
       if (package == 'igraph') {
         if(directed == TRUE){
@@ -119,142 +117,159 @@ netwrite <- function(adjacency=FALSE, adjacency_matrix=FALSE, nodelist=FALSE,
           network <- igraph::graph_from_adjacency_matrix(adj_matrix, mode=c('undirected'), diag = FALSE)
         }
       }else{
-        network <- network::
-        
+        if(directed == TRUE){
+          network <- network::as.network(adj_matrix, matrix.type = "adjacency", directed = TRUE)
+        }else{
+          network <- network::as.network(adj_matrix, matrix.type = "adjacency", directed = FALSE)
+        }
       }
+      assign(x = net_name, value = network,.GlobalEnv)
     }else{
-      edgelist <- edgelist[,]
-    }
-  
-  # Creating Canonical Node and Edgelists
-    if(weights==FALSE){
-      edgelist <-as.data.frame(cbind(i_elements, j_elements))
-      edgelist <-cbind(edgelist, rep(1,nrow(edgelist)))
-      colnames(edgelist)[[3]] <- c('weight')
-    }else{
-      edgelist <-as.data.frame(cbind(i_elements, j_elements, weights))
-    }
+    # Creating Canonical Node and Edgelists
+      if(weights==FALSE){
+        edgelist <-as.data.frame(cbind(i_elements, j_elements))
+        edgelist <-cbind(edgelist, rep(1,nrow(edgelist)))
+        colnames(edgelist)[[3]] <- c('weight')
+      }else{
+        edgelist <-as.data.frame(cbind(i_elements, j_elements, weights))
+      }
     
-    edgelist <- edgelist[!(rowSums(is.na(edgelist))), ]
-    edgelist <- edgelist[edgelist$i_elements != missing_code & edgelist$j_elements != missing_code, ] 
-    edgelist <- cbind(seq(1,nrow(edgelist), 1), edgelist)
-    colnames(edgelist)[[1]] <- c('Obs_ID')
+      edgelist <- edgelist[!(rowSums(is.na(edgelist))), ]
+      edgelist <- edgelist[edgelist$i_elements != missing_code & edgelist$j_elements != missing_code, ] 
+      edgelist <- cbind(seq(1,nrow(edgelist), 1), edgelist)
+      colnames(edgelist)[[1]] <- c('Obs_ID')
   
-    if(nodelist==FALSE) {
-      nodes <- as.data.frame(sort(unique(c(edgelist$i_elements, edgelist$j_elements))))
-      nodes <- cbind(seq(1,nrow(nodes),1), nodes)
-      colnames(nodes) <- c('id', 'label')
+      if(nodelist==FALSE) {
+        nodes <- as.data.frame(sort(unique(c(edgelist$i_elements, edgelist$j_elements))))
+        nodes <- cbind(seq(1,nrow(nodes),1), nodes)
+        colnames(nodes) <- c('id', 'label')
       
-      senders <- edgelist[c(1:2)]
-      colnames(senders)[[2]] <- c('label')
-      senders <- dplyr::left_join(senders, nodes, by='label')
-      colnames(senders)[c(2,3)] <- c('i_elements', 'i_id')
+        senders <- edgelist[c(1:2)]
+        colnames(senders)[[2]] <- c('label')
+        senders <- dplyr::left_join(senders, nodes, by='label')
+        colnames(senders)[c(2,3)] <- c('i_elements', 'i_id')
       
-      targets <- edgelist[c(1,3,4)]
-      colnames(targets)[[2]] <- c('label')
-      targets <- dplyr::left_join(targets, nodes, by='label')
-      colnames(targets)[c(2,4)] <- c('j_elements', 'j_id')
-      targets <- targets[c(1,2,4,3)]
+        targets <- edgelist[c(1,3,4)]
+        colnames(targets)[[2]] <- c('label')
+        targets <- dplyr::left_join(targets, nodes, by='label')
+        colnames(targets)[c(2,4)] <- c('j_elements', 'j_id')
+        targets <- targets[c(1,2,4,3)]
       
-      edgelist <- dplyr::left_join(senders, targets, by='Obs_ID')
+        edgelist <- dplyr::left_join(senders, targets, by='Obs_ID')
       
-      edgelist <- edgelist[order(edgelist$i_id, edgelist$j_id), ]
+        edgelist <- edgelist[order(edgelist$i_id, edgelist$j_id), ]
       
-      rm(senders, targets)
-    }else{
-      nodes <- nodelist[,]
+        rm(senders, targets)
+      }else{
+        nodes <- nodelist[,]
       
-      nodes <- cbind(seq(1,nrow(nodes),1), nodes)
-      colnames(nodes) <- c('id', 'label')
+        nodes <- cbind(seq(1,nrow(nodes),1), nodes)
+        colnames(nodes) <- c('id', 'label')
       
-      senders <- edgelist[c(1:2)]
-      colnames(senders)[[2]] <- c('label')
-      senders <- dplyr::left_join(senders, nodes, by='label')
-      colnames(senders)[c(2,3)] <- c('i_elements', 'i_id')
+        senders <- edgelist[c(1:2)]
+        colnames(senders)[[2]] <- c('label')
+        senders <- dplyr::left_join(senders, nodes, by='label')
+        colnames(senders)[c(2,3)] <- c('i_elements', 'i_id')
       
-      targets <- edgelist[c(1,3,4)]
-      colnames(targets)[[2]] <- c('label')
-      targets <- dplyr::left_join(targets, nodes, by='label')
-      colnames(targets)[c(2,4)] <- c('j_elements', 'j_id')
-      targets <- targets[c(1,2,4,3)]
+        targets <- edgelist[c(1,3,4)]
+        colnames(targets)[[2]] <- c('label')
+        targets <- dplyr::left_join(targets, nodes, by='label')
+        colnames(targets)[c(2,4)] <- c('j_elements', 'j_id')
+        targets <- targets[c(1,2,4,3)]
       
-      edgelist <- dplyr::left_join(senders, targets, by='Obs_ID')
+        edgelist <- dplyr::left_join(senders, targets, by='Obs_ID')
       
-      edgelist <- edgelist[order(edgelist$i_id, edgelist$j_id), ]
+        edgelist <- edgelist[order(edgelist$i_id, edgelist$j_id), ]
       
-      rm(senders, targets)
-    }
+        rm(senders, targets)
+      }
     
-  # igraph
-    if(package=='igraph') {
-      # Installing Necessary Packages 
-        list.of.packages <- c('igraph')
-        new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
-        if(length(new.packages)) install.packages(new.packages)
-        rm(list.of.packages, new.packages)
+    # igraph
+      if(package=='igraph') {
+        # Installing Necessary Packages 
+          list.of.packages <- c('igraph')
+          new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
+          if(length(new.packages)) install.packages(new.packages)
+          rm(list.of.packages, new.packages)
       
-      # Make Zero-Indexed
-        nodes$id <- nodes$id - 1
-        edgelist$i_id <- edgelist$i_id - 1
-        edgelist$j_id <- edgelist$j_id - 1
+        # Make Zero-Indexed
+          nodes$id <- nodes$id - 1
+          edgelist$i_id <- edgelist$i_id - 1
+          edgelist$j_id <- edgelist$j_id - 1
         
-      # Make Weights Reflect Frequency Rather than Distance
-        if(weight_type == 'frequency') {
-          edgelist$weight <- 1/edgelist$weight
-        }else{
-          edgelist$weight <- edgelist$weight
-        }
+        # Make Weights Reflect Frequency Rather than Distance
+          if(weight_type == 'frequency') {
+            edgelist$weight <- 1/edgelist$weight
+          }else{
+            edgelist$weight <- edgelist$weight
+          }
         
-      # Creating igraph object
-        colnames(nodes)[[2]] <- c('attr')
-        g <- igraph::graph_from_data_frame(d = edgelist[c(3,5)], directed = F, vertices = nodes) 
+        # Creating igraph object
+          colnames(nodes)[[2]] <- c('attr')
+          g <- igraph::graph_from_data_frame(d = edgelist[c(3,5)], directed = F, vertices = nodes) 
         
-      # Adding edge weights
-        igraph::edge.attributes(g)$weight <- edgelist$weight
-        
-    }else{
-      edgelist <- edgelist[,]
-    }
+        # Adding edge weights
+          igraph::edge.attributes(g)$weight <- edgelist$weight
+      }else{
+        edgelist <- edgelist[,]
+      }
     
-  # networks
-    if(package=='network') {
-      # Installing Necessary Packages 
-        list.of.packages <- c('network')
-        new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
-        if(length(new.packages)) install.packages(new.packages)
-        rm(list.of.packages, new.packages)
+    # networks
+      if(package=='network') {
+        # Installing Necessary Packages 
+          list.of.packages <- c('network')
+          new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
+          if(length(new.packages)) install.packages(new.packages)
+          rm(list.of.packages, new.packages)
         
-      # Make Weights Reflect Distance Rather than Frequency
-        if(weight_type != 'frequency') {
-          edgelist$weight <- 1/edgelist$weight
-        }else{
-          edgelist$weight <- edgelist$weight
-        }
+        # Make Weights Reflect Distance Rather than Frequency
+          if(weight_type != 'frequency') {
+            edgelist$weight <- 1/edgelist$weight
+          }else{
+            edgelist$weight <- edgelist$weight
+          }
       
-      # Creating sna networks to isolate network components
-        g <- network::network.initialize(nrow(nodes), directed = as.logical(directed))
+        # Creating sna networks to isolate network components
+          g <- network::network.initialize(nrow(nodes), directed = as.logical(directed))
         
-      # Adding Edges
-        el <- edgelist[c(3,5)]
-        el[] <- lapply(el, as.character)
-        g <- network::add.edges(g, el[[1]],el[[2]])
+        # Adding Edges
+          el <- edgelist[c(3,5)]
+          el[] <- lapply(el, as.character)
+          g <- network::add.edges(g, el[[1]],el[[2]])
         
-      # Adding Weights
-        network::set.edge.value(g,"weight", edgelist$weight)
-    }else{
-      edgelist <- edgelist
-    }
+        # Adding Weights
+          network::set.edge.value(g,"weight", edgelist$weight)
+      }else{
+        edgelist <- edgelist
+      }
   
-  # Outputting Network Objects
-    assign(x = 'edgelist', value = edgelist,.GlobalEnv)  
-    assign(x = 'nodelist', value = nodes,.GlobalEnv)  
-    assign(x = net_name, value = g,.GlobalEnv)  
+    # Outputting Network Objects
+      assign(x = 'edgelist', value = edgelist,.GlobalEnv)  
+      assign(x = 'nodelist', value = nodes,.GlobalEnv)  
+      assign(x = net_name, value = g,.GlobalEnv)
+  }
 }
 
-netwrite(nodelist=FALSE, weights=FALSE, community_1$ego_nid, community_1$alter_id, package='network', missing_code=99999, 
-         weight_type='frequency', directed='TRUE', net_name='network')
+# Edgelist Example
+  netwrite(adjacency=FALSE, adjacency_matrix=FALSE, nodelist=FALSE, weights=FALSE, 
+           community_1$ego_nid, community_1$alter_id, package='network', missing_code=99999, 
+           weight_type='frequency', directed='TRUE', net_name='network')
 
-plot(network)
+  plot(network)
+  
+# Adjacency Matrix Example
+  adj_mat <- as.matrix(network, matrix.type="adjacency")
+  rm(network, edgelist, nodelist)
+  
+  netwrite(adjacency=TRUE, adjacency_matrix=adj_mat, nodelist=FALSE, weights=FALSE, 
+           community_1$ego_nid, community_1$alter_id, package='network', missing_code=99999, 
+           weight_type='frequency', directed='TRUE', net_name='network')
+  
+  netwrite(adjacency=TRUE, adjacency_matrix=adj_mat, nodelist=FALSE, weights=FALSE, 
+           community_1$ego_nid, community_1$alter_id, package='igraph', 
+           missing_code=99999, weight_type='frequency', directed='TRUE', net_name='network')
+  
+  plot(network)
 
 ###############
 #   netread   #
