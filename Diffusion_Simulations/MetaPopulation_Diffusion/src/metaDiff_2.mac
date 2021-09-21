@@ -1,0 +1,152 @@
+﻿
+
+/* Meta-population diffusion model macro.
+	This macro produces a cell-based/macro-level diffusion simulation for use on agregate 
+	poopulations.  The idea is that given some probability of contact between units & known
+	infection process we can simulate the growth & contagion across settings.
+
+	Input is a node list that contains information on the population characteristics of each
+     place and a weighted edgelist, where the edgeweights represent the probability that a 
+     person from place i would interact with a person from place j.
+
+	Revision of the safegraph_... files.
+
+	Author: Moody
+	Date: 7.12.2021
+	*/
+
+%macro MetaDiff(nodedata=,  /* name of datafile with cell(node) information */
+				nodeid=,   /* var name for nodeID. contents must match nodeid1, nodeid2 in edgefile */
+			   	nodepop=, /* var name total number of people in cell */
+			   	n_i=, /* var name for number infected */
+				n_s=, /* var name for number susceptable */
+				n_r=, /* var name for number recovered  */
+			    degvar=, /*var name for average degree in cell*/
+				days=,  /* constant: max number of days to run */
+			    inftime=, /* constant: how many days infection lasts */
+				beta=, /* constant: probability of infection from i-->s */
+			    edges=, /* name of datafile with edge info */
+				nodeid1=, /* var name for sender */
+				nodeid2=, /* var name for reciever */
+				tranprob=); /*edge-specific transmission probability */
+
+options nonotes;
+
+/* initialize datasets that track progress */
+proc means data=&nodedata noprint nway ;
+class t;
+var &n_i &n_r &n_s;
+output out=_trackt sum=;
+run;
+
+data _infstack;
+ keep t &nodeid totNumTrans;
+   set &nodedata;
+    where &n_i>0;
+    t=0;
+    totnumtrans=&n_i; /* just initialize */
+ run;
+
+
+/* run sim for t days */
+%do t=1 %to &days;
+ %put &t;
+
+ /* single SQL run of the transmission prob bit.   */
+ proc sql;
+	create table _newtrans as select
+	 a.&nodeid1 as &nodeid, a.&nodeid2 as infsource, &t as t,
+	 (1-((c.&n_i/c.&nodepop)*&beta))**(b.&degvar*a.&tranprob) as pNotTrans_ij, b.&n_s as &n_s
+	from &edges as a, &nodedata as b, &nodedata as c
+	where a.&tranprob>0 & b.&n_i>0 & c.&n_s>0 & a.&nodeid1=b.&nodeid & a.&nodeid2=c.&nodeid
+	 order by (a.&nodeid1);
+  quit;
+
+
+  /* sum over all Susceptables.  */
+  data _newinf;
+   retain notprod;
+    set _newtrans;
+     by nodeid;
+ 	if first.nodeid then do;
+	  notprod=pnottrans_ij;
+	end;
+	else do;
+	  notprod=notprod*pnottrans_ij;
+	end;
+	if last.nodeid then do;
+	 totnumtrans=&n_s*(1-notprod);
+	 output;
+	end;
+ run;
+    
+
+ /* now construct datasets that control the flow of infection over time; one w. a temporal tracker 
+     for sequence of the epidemic, one to update node for current state.  */
+
+   /* records each iterations additions */
+   data _infstack;
+    set _infstack _newinf (keep=t &nodeid totnumtrans);
+    run;
+   
+   %if &t <= &inftime %then %do; /* nobody at risk to recovery */
+    data &nodedata; 
+	  keep &nodeid &n_i &n_r &n_s &nodepop &degvar t;
+      merge &nodedata _newinf;
+	   by &nodeid; 
+	   if totnumtrans=. then totnumtrans=0;
+	  &n_i=&n_i+totnumtrans;
+	  &n_s=&n_s-totnumtrans;
+ 	 run;
+	%end;
+
+	%else %do; /* some at risk */
+
+	 /* hard coded recovery here */
+	 data _newrec;
+	  set _infstack (rename=(totnumtrans=recnum));
+	   where t=&t-(&inftime+1);
+	  run;
+
+    data &nodedata;
+	 keep &nodeid &n_i &n_r &n_s &nodepop &degvar t;
+	  merge &nodedata _newinf _newrec;
+	  by nodeid;
+	    if recnum=. then recnum=0;
+		if totnumtrans=. then totnumtrans=0;
+		&n_i=&n_i+totnumtrans-recnum; /* current infections */
+		&n_s=&n_s-totnumtrans; /* current susceptible  */
+		&n_r=&n_r+recnum; /* current recovered => cummulative! */
+       run;
+	%end;
+
+	proc means noprint data=&nodedata;
+	 var &n_i &n_s &n_r;
+	 output out=_tinf sum=;
+	 run;
+
+	 data _tinf;
+	  set _tinf;
+	   t=&t;
+	     call symput("no_i",round(&n_i,1));
+		 call symput("no_s",round(&n_s,1));
+	   run;
+
+	 data _trackt;
+	  set _trackt _tinf (keep=t &n_i &n_r &n_s);
+	  run;
+	  %if (&no_i = 0) | (&no_s = 0) %then %do; /* stop if finished */
+	    %let t=&days;
+	  %end;
+  %end;
+
+
+  /* add run constants to the output data just to have them */
+  data _trackt;
+   set _trackt;
+     beta=&beta;
+	 inftime=&inftime;
+	run;
+
+  options notes;
+  %mend;
