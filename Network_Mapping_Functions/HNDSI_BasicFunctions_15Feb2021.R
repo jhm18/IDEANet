@@ -132,7 +132,7 @@ base_data <- import_data('ahs_wpvar')
     }else if(data_type == 'adjacency_list'){
       # Is the adjacency list a list
         if(class(adjacency_list) == 'list'){
-          g <- igraph::graph_from_adj_list(adj_list, mode="all")
+          g <- igraph::graph_from_adj_list(adj_list, mode="out")
         }else{
           # Converting to a list
             adj_list <- vector('list', dim(adjacency_list)[[1]])
@@ -147,7 +147,7 @@ base_data <- import_data('ahs_wpvar')
             }
           
           # Generating network from adjacency list
-            g <- igraph::graph_from_adj_list(adj_list, mode="all")
+            g <- igraph::graph_from_adj_list(adj_list, mode="out")
         }
       
       # Generating network object
@@ -328,7 +328,7 @@ base_data <- import_data('ahs_wpvar')
   plot(net_4)
   
 # Adjacency List Example
-  adjacency_list <- igraph::as_adj_list(net_1, mode='all')
+  adjacency_list <- igraph::as_adj_list(net_1, mode='out')
   
   adj_list <- vector('list', length(adjacency_list))
   for (i in seq_along(adjacency_list)) {
