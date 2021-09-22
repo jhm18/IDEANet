@@ -1,6 +1,6 @@
 # HNDSI Basic Network Function Prototypes
 # Jonathan H. Morgan
-# 3 September 2021
+# 22 September 2021
 
 # Basic Functions: More Functions to Be Added
 #   netread
@@ -88,6 +88,18 @@ base_data <- import_data('ahs_wpvar')
 #   https://igraph.org/r/doc/get.edge.ids.html
   
 # Currently Supported Packages (Will Add Pajek, ORA, UCINet, etc)
+# Starting Adding Default Metrics that Come with the Nodes File, and start Developing an attractive Visual Summary
+
+# System Measures
+  # Degree Distribution
+  # Number of Components 
+  # Proportion Largest Component
+  # Diameter
+  # Average Euclidean Distance
+  # Clustering Coefficient
+  # Triad Census
+  # Flow Hiearchy (Directed): Flow hierarchy is defined as the fraction of edges not participating in cycles in a directed graph
+  
   support_packages <- c('igraph', 'network')
   
   netwrite <- function(data_type = c('edgelist'), adjacency_matrix=FALSE, adjacency_list=FALSE,
@@ -113,15 +125,115 @@ base_data <- import_data('ahs_wpvar')
       # Generating Network Object
         if (package == 'igraph') {
           if(directed == TRUE){
-            g <- igraph::graph_from_adjacency_matrix(adjacency_matrix, mode=c('directed'), diag = TRUE)
+            # Generating directed graph
+              g <- igraph::graph_from_adjacency_matrix(adjacency_matrix, mode=c('directed'), diag = TRUE)
+              
+            # Creating Nodes File with Node-Level Measures
+              edges <- as.data.frame(igraph::as_edgelist(g, names=FALSE))
+              nodes <- as.data.frame(sort(unique(c(edges$V1, edges$V2))))
+              colnames(nodes) <- c('id')
+              nodes$id <- nodes$id - 1
+              
+            # Adding Node-Level Measures
+              total_degree <- igraph::degree(g, mode='all', loops=FALSE)
+              in_degree <- igraph::degree(g, mode='in', loops=FALSE)
+              out_degree <- igraph::degree(g, mode='out', loops=FALSE)
+              closeness <- igraph::closeness(g, mode='in')
+              betweenness <- igraph::betweenness(g, directed=as.logical(directed))
+              bonpow <- igraph::bonpow(g, loops=FALSE)
+              eigen_cen <- as.numeric(igraph::eigen_centrality(g, directed=as.logical(directed))[[1]])
+              nodes <- as.data.frame(cbind(nodes, total_degree, in_degree, out_degree, closeness, betweenness, bonpow, eigen_cen))
           }else{
-            g <- igraph::graph_from_adjacency_matrix(adjacency_matrix, mode=c('undirected'), diag = FALSE)
+            # Generating undirected graph
+              g <- igraph::graph_from_adjacency_matrix(adjacency_matrix, mode=c('undirected'), diag = FALSE)
+              
+              # Creating Nodes File with Node-Level Measures
+              edges <- as.data.frame(igraph::as_edgelist(g, names=FALSE))
+              nodes <- as.data.frame(sort(unique(c(edges$V1, edges$V2))))
+              colnames(nodes) <- c('id')
+              nodes$id <- nodes$id - 1
+              
+              # Adding Node-Level Measures
+              total_degree <- igraph::degree(g, mode='all', loops=FALSE)
+              in_degree <- igraph::degree(g, mode='in', loops=FALSE)
+              out_degree <- igraph::degree(g, mode='out', loops=FALSE)
+              closeness <- igraph::closeness(g, mode='in')
+              betweenness <- igraph::betweenness(g, directed=as.logical(directed))
+              bonpow <- igraph::bonpow(g, loops=FALSE)
+              eigen_cen <- as.numeric(igraph::eigen_centrality(g, directed=as.logical(directed))[[1]])
+              nodes <- as.data.frame(cbind(nodes, total_degree, in_degree, out_degree, closeness, betweenness, bonpow, eigen_cen))
+            
+            # Creating Nodes File with Node-Level Measures
+              edges <- as.data.frame(igraph::as_edgelist(g, names=FALSE))
+              nodes <- as.data.frame(sort(unique(c(edges$V1, edges$V2))))
+              colnames(nodes) <- c('id')
+              nodes$id <- nodes$id - 1
+            
+            # Adding Node-Level Measures
+              total_degree <- igraph::degree(g, mode='all', loops=FALSE)
+              in_degree <- igraph::degree(g, mode='in', loops=FALSE)
+              out_degree <- igraph::degree(g, mode='out', loops=FALSE)
+              closeness <- igraph::closeness(g, mode='in')
+              betweenness <- igraph::betweenness(g, directed=as.logical(directed))
+              bonpow <- igraph::bonpow(g, loops=FALSE)
+              eigen_cen <- as.numeric(igraph::eigen_centrality(g, directed=as.logical(directed))[[1]])
+              nodes <- as.data.frame(cbind(nodes, total_degree, in_degree, out_degree, closeness, betweenness, bonpow, eigen_cen))
           }
         }else if (package == 'network'){
           if(directed == TRUE){
-            g <- network::as.network(adjacency_matrix, matrix.type = "adjacency", directed = TRUE)
+            # Outputting a directed graph
+              g <- network::as.network(adjacency_matrix, matrix.type = "adjacency", directed = TRUE)
+            
+            # Specifying network metric commands
+              if (directed == TRUE) {
+                gmode <- 'digraph'
+                cmode <- 'directed'
+              }else{
+                gmode <- 'graph'
+                cmode <- 'undirected'
+              }
+              
+            # Extracting nodes
+              edges <- network::as.edgelist(g)
+              nodes <- as.data.frame(sort(unique(c(edges[,1], edges[,2]))))
+              colnames(nodes) <- c('id')
+            
+            # Adding node-level measures
+              total_degree <- sna::degree(g, gmode=gmode, cmode='freeman')
+              in_degree <- sna::degree(g, gmode=gmode, cmode='indegree')
+              out_degree <- sna::degree(g, gmode=gmode, cmode='outdegree')
+              closeness <- sna::closeness(g, gmode=gmode, cmode="gil-schmidt")
+              betweenness <- sna::betweenness(g, gmode=gmode, cmode=cmode)
+              bonpow <- as.numeric(sna::bonpow(g, gmode=gmode))
+              eigen_cen <- sna::evcent(g, gmode=gmode)
+              nodes <- as.data.frame(cbind(nodes, total_degree, in_degree, out_degree, closeness, betweenness, bonpow, eigen_cen))
           }else{
-            g <- network::as.network(adjacency_matrix, matrix.type = "adjacency", directed = FALSE)
+            # Outputting undirected graph
+              g <- network::as.network(adjacency_matrix, matrix.type = "adjacency", directed = FALSE)
+            
+            # Specifying network metric commands
+              if (directed == TRUE) {
+                gmode <- 'digraph'
+                cmode <- 'directed'
+              }else{
+                gmode <- 'graph'
+                cmode <- 'undirected'
+              }
+              
+            # Extracting nodes
+              edges <- network::as.edgelist(g)
+              nodes <- as.data.frame(sort(unique(c(edges[,1], edges[,2]))))
+              colnames(nodes) <- c('id')
+              
+            # Adding node-level measures
+              total_degree <- sna::degree(g, gmode=gmode, cmode='freeman')
+              in_degree <- sna::degree(g, gmode=gmode, cmode='indegree')
+              out_degree <- sna::degree(g, gmode=gmode, cmode='outdegree')
+              closeness <- sna::closeness(g, gmode=gmode, cmode="gil-schmidt")
+              betweenness <- sna::betweenness(g, gmode=gmode, cmode=cmode)
+              bonpow <- as.numeric(sna::bonpow(g, gmode=gmode))
+              eigen_cen <- sna::evcent(g, gmode=gmode)
+              nodes <- as.data.frame(cbind(nodes, total_degree, in_degree, out_degree, closeness, betweenness, bonpow, eigen_cen))
           }
         }else{
           print('Network package not supported.')
@@ -129,6 +241,7 @@ base_data <- import_data('ahs_wpvar')
       
       # Outputting Network Object to the Global Environment
         assign(x = net_name, value = g,.GlobalEnv)
+        assign(x = 'nodes', value = nodes, .GlobalEnv)
     }else if(data_type == 'adjacency_list'){
       # Is the adjacency list a list
         if(class(adjacency_list) == 'list'){
@@ -152,7 +265,24 @@ base_data <- import_data('ahs_wpvar')
       
       # Generating network object
         if (package == 'igraph') {
-          g <- g
+          # Copying igraph object
+            g <- g
+          
+          # Creating Nodes File with Node-Level Measures
+            edges <- as.data.frame(igraph::as_edgelist(g, names=FALSE))
+            nodes <- as.data.frame(sort(unique(c(edges$V1, edges$V2))))
+            colnames(nodes) <- c('id')
+            nodes$id <- nodes$id - 1
+            
+          # Adding Node-Level Measures
+            total_degree <- igraph::degree(g, mode='all', loops=FALSE)
+            in_degree <- igraph::degree(g, mode='in', loops=FALSE)
+            out_degree <- igraph::degree(g, mode='out', loops=FALSE)
+            closeness <- igraph::closeness(g, mode='in')
+            betweenness <- igraph::betweenness(g, directed=as.logical(directed))
+            bonpow <- igraph::bonpow(g, loops=FALSE)
+            eigen_cen <- as.numeric(igraph::eigen_centrality(g, directed=as.logical(directed))[[1]])
+            nodes <- as.data.frame(cbind(nodes, total_degree, in_degree, out_degree, closeness, betweenness, bonpow, eigen_cen))
         }else if (package == 'network') {
           # Getting Edgelist: iGraph
             edges <- as.data.frame(igraph::as_edgelist(g, names=FALSE))
@@ -180,12 +310,31 @@ base_data <- import_data('ahs_wpvar')
             el[,1] <- as.character(el[,1])
             el[,2] <- as.character(el[,2])
             g <- network::add.edges(g, el[,1], el[,2])
+            
+          # Adding Node-Level Measures
+            if (directed == TRUE) {
+              gmode <- 'digraph'
+              cmode <- 'directed'
+            }else{
+              gmode <- 'graph'
+              cmode <- 'undirected'
+            }
+            
+            total_degree <- sna::degree(g, gmode=gmode, cmode='freeman')
+            in_degree <- sna::degree(g, gmode=gmode, cmode='indegree')
+            out_degree <- sna::degree(g, gmode=gmode, cmode='outdegree')
+            closeness <- sna::closeness(g, gmode=gmode, cmode="gil-schmidt")
+            betweenness <- sna::betweenness(g, gmode=gmode, cmode=cmode)
+            bonpow <- as.numeric(sna::bonpow(g, gmode=gmode))
+            eigen_cen <- sna::evcent(g, gmode=gmode)
+            nodes <- as.data.frame(cbind(nodes, total_degree, in_degree, out_degree, closeness, betweenness, bonpow, eigen_cen))
         }else {
           print('Network package not supported.')
         }
         
       # Outputting network object to global environment
         assign(x = net_name, value = g,.GlobalEnv)
+        assign(x = 'nodes', value = nodes, .GlobalEnv)
     }else{
       # Creating Canonical Node and Edgelists
         if(weights==FALSE){
@@ -265,6 +414,17 @@ base_data <- import_data('ahs_wpvar')
             
           # Adding edge weights
             igraph::edge.attributes(g)$weight <- edgelist[,6]
+            
+          # Adding Node-Level Measures
+            total_degree <- igraph::degree(g, mode='all', loops=FALSE)
+            in_degree <- igraph::degree(g, mode='in', loops=FALSE)
+            out_degree <- igraph::degree(g, mode='out', loops=FALSE)
+            closeness <- igraph::closeness(g, mode='in')
+            betweenness <- igraph::betweenness(g, directed=as.logical(directed))
+            bonpow <- igraph::bonpow(g, loops=FALSE)
+            eigen_cen <- as.numeric(igraph::eigen_centrality(g, directed=as.logical(directed))[[1]])
+            nodes <- as.data.frame(cbind(nodes, total_degree, in_degree, out_degree, closeness, betweenness, bonpow, eigen_cen))
+            
         }else if(package == 'network'){
           # Make Weights Reflect Distance Rather than Frequency
             if(weight_type != 'frequency') {
@@ -284,6 +444,24 @@ base_data <- import_data('ahs_wpvar')
           
           # Adding Weights
             network::set.edge.value(g,"weight", edgelist[,6])
+            
+          # Adding Node-Level Measures
+            if (directed == TRUE) {
+              gmode <- 'digraph'
+              cmode <- 'directed'
+            }else{
+              gmode <- 'graph'
+              cmode <- 'undirected'
+            }
+          
+            total_degree <- sna::degree(g, gmode=gmode, cmode='freeman')
+            in_degree <- sna::degree(g, gmode=gmode, cmode='indegree')
+            out_degree <- sna::degree(g, gmode=gmode, cmode='outdegree')
+            closeness <- sna::closeness(g, gmode=gmode, cmode="gil-schmidt")
+            betweenness <- sna::betweenness(g, gmode=gmode, cmode=cmode)
+            bonpow <- as.numeric(sna::bonpow(g, gmode=gmode))
+            eigen_cen <- sna::evcent(g, gmode=gmode)
+            nodes <- as.data.frame(cbind(nodes, total_degree, in_degree, out_degree, closeness, betweenness, bonpow, eigen_cen))
         }else{
           edgelist <- edgelist[,]
         }
