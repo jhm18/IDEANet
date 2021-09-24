@@ -587,4 +587,85 @@ netread(package='network', network_object=network)
 #   NOTES   #
 #############
 
+# Calculating Flow Hierarchy (http://web.mit.edu/~cmagee/www/documents/28-DetectingEvolvingPatterns_FlowHierarchy.pdf)
+  flow_hierarchy <- function(g){
+    # Notes: Luo and Magee's algorithm computes the flow hierarchy through exponentiation of the adjacency matrix.  This function implements an
+    # An alternative approach is to  find all the strongly connected components.
+    # An edge is in a cycle if and only if it is in a strongly connected component
+    
+    if(igraph::is.directed(g) == TRUE){
+      # Generate a sorted list of strongly connected components
+        scc <- igraph::components(g, mode='strong')
+        scc <- as.data.frame(cbind(seq(1, length(igraph::V(g)), 1), as.integer(scc[[1]])))
+        colnames(scc) <- c('node_id', 'component_id')
+
+      # Assigning vertex ids and component ids 
+        g <- igraph::set_vertex_attr(g, "components", index = igraph::V(g), as.factor(scc$component_id ))
+        g <- igraph::set.vertex.attribute(g,'name',index=igraph::V(g),as.character(1:igraph::vcount(g)))
+        
+      # Calculating the node weights for each node for each component 
+      # Node weights are the weighted degree of each node
+        components <- sort(unique(scc$component_id))
+        weights <- vector('list', length(components))
+        names(weights) <- components
+        for(i in seq_along(components)){
+          c <- components[[i]]
+          sub_ids <- sort(scc[(scc$component_id == c), ][[1]]) 
+          g.sub <- igraph::induced.subgraph(graph=g, vids=sub_ids)
+          sub_weights <- igraph::strength(g.sub, vids=igraph::V(g.sub), mode='all')
+          sub_ids <- as.integer(igraph::get.vertex.attribute(g.sub, 'name'))
+          c_weights <- as.data.frame(cbind(sub_ids, sub_weights))
+          colnames(c_weights) <- c('node_id', 'node_weight')
+          weights[[i]] <- c_weights
+          rm(c, g.sub, sub_weights, sub_ids )
+        }
+        
+        weights <- do.call("rbind", weights)
+        scc <- dplyr::left_join(scc, weights, by='node_id')
+        rm(weights)
+          
+      # Calculating the weighted degree for the full graph
+        scc$graph_weight <- igraph::strength(g, vids=igraph::V(g), mode='all')
+        
+      # Calculating flow hierarchy
+        flow_hierarchy_score <- 1 - (sum(scc$node_weight)/sum(scc$graph_weight))
+        
+      # Assigning Score to the Global Environment 
+        assign(x = 'flow_hierarchy_score', value = flow_hierarchy_score,.GlobalEnv)  
+    }else{
+      print("The graph being analyzed must be a digraph to compute a flow hierarchy score")
+    }
+  }
+  
+# Add Health Example
+  flow_hierarchy(net_1)
+  
+# A Star
+  star <- igraph::make_star(40)
+  plot(star)
+  
+  flow_hierarchy(star)
+  
+# Florentine Families (Undirected Graph)
+  library(netrankr)
+  data("florentine_m")
+  flo <- igraph::delete_vertices(florentine_m,which(igraph::degree(florentine_m)==0))
+  plot(flo)
+  
+  flow_hierarchy(flo)
+  
+# Community 2
+  community_2 <- communities_edgelist[[2]]
+  
+  netwrite(data_type = c('edgelist'), adjacency_matrix=FALSE, adjacency_list=FALSE,
+           nodelist=FALSE, i_elements=community_2$ego_nid, j_elements=community_2$alter_id, weights=FALSE,
+           package='igraph', missing_code=99999, weight_type='frequency', 
+           directed='TRUE', net_name='net_1')
+  
+  plot(net_2)
+  
+# Network Diagnostics (Two pane figure displaying system and node-level measures)
+  
+
+
 
