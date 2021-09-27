@@ -78,6 +78,7 @@ base_data <- import_data('ahs_wpvar')
 
 # Focusing on Community One for Demonstration Purposes
   community_1 <- communities_edgelist[[1]]
+  community_2 <- communities_edgelist[[2]]
   
 ################
 #   netwrite   #
@@ -88,9 +89,15 @@ base_data <- import_data('ahs_wpvar')
 #   https://igraph.org/r/doc/get.edge.ids.html
   
 # Currently Supported Packages (Will Add Pajek, ORA, UCINet, etc)
-# Starting Adding Default Metrics that Come with the Nodes File, and start Developing an attractive Visual Summary
 
-# System Measures
+# Urgent To Do Items (27 September 2021):
+  # De-conflict alternative implmentations of closeness
+  # Eliminate self-loops from iGraph reachablity function
+  # Compare egonet's implmentation of constrating with iGraph (Look at GitHub)
+  # Implement expanded network measures list for adjacency matrix and adjacency list implmentations
+  # Test function on more and larger networks
+
+# System Measures to Implement
   # Degree Distribution
   # Number of Components 
   # Proportion Largest Component
@@ -415,15 +422,45 @@ base_data <- import_data('ahs_wpvar')
           # Adding edge weights
             igraph::edge.attributes(g)$weight <- edgelist[,6]
             
+          # Create an alternate closeness function
+            closeness <- function(g){ 
+              geo <- 1/igraph::shortest.paths(g, mode='all')
+              diag(geo) <- 0 # Define self-ties as 0
+              apply(geo, 1, sum) # Return sum(1/geodist) for each vertex
+            }
+            
+          # Reachablility function (Eliminate Loops, reaching yourself isn't that useful)
+            reachable <- function(g){
+              # Isolating the node's ego-network, the number of reachable nodes, and cacluating the proportion of the total
+                proportion_reachable <- vector('numeric', nrow(nodes))
+                if(directed == TRUE){
+                  for(i in seq_along(proportion_reachable)){
+                    proportion_reachable[[i]] <- length(igraph::subcomponent(g, (nodes[i, 1] + 1), mode = c("out")))/nrow(nodes)
+                  }
+                }else{
+                  for(i in seq_along(proportion_reachable)){
+                    proportion_reachable[[i]] <- length(igraph::subcomponent(g, (nodes[i, 1] + 1), mode = c("all")))/nrow(nodes)
+                  }
+                }
+                
+              # Writing to global environment
+                assign(x = 'reachability', value = proportion_reachable,.GlobalEnv)  
+            }
+            
           # Adding Node-Level Measures
             total_degree <- igraph::degree(g, mode='all', loops=FALSE)
+            weighted_degree <- igraph::strength(g, mode='all', loops=FALSE)
             in_degree <- igraph::degree(g, mode='in', loops=FALSE)
             out_degree <- igraph::degree(g, mode='out', loops=FALSE)
-            closeness <- igraph::closeness(g, mode='in')
+            closeness <- closeness(g)
             betweenness <- igraph::betweenness(g, directed=as.logical(directed))
-            bonpow <- igraph::bonpow(g, loops=FALSE)
+            bonpow <- igraph::bonpow(g, loops=FALSE, exponent = 0.75)
             eigen_cen <- as.numeric(igraph::eigen_centrality(g, directed=as.logical(directed))[[1]])
-            nodes <- as.data.frame(cbind(nodes, total_degree, in_degree, out_degree, closeness, betweenness, bonpow, eigen_cen))
+            constraint <- igraph::constraint(g)
+            reachability <- reachable(g)
+                          
+            nodes <- as.data.frame(cbind(nodes, total_degree, weighted_degree, in_degree, out_degree, 
+                                         closeness, betweenness, bonpow, eigen_cen, constraint, reachability))
             
         }else if(package == 'network'){
           # Make Weights Reflect Distance Rather than Frequency
@@ -453,15 +490,82 @@ base_data <- import_data('ahs_wpvar')
               gmode <- 'graph'
               cmode <- 'undirected'
             }
+            
+          # Create an alternate closeness function
+            closeness <- function(g){           # Create an alternate closeness function!
+              geo <- 1/sna::geodist(g)$gdist    # Get the matrix of 1/geodesic distance
+              diag(geo) <- 0                    # Define self-ties as 0
+              apply(geo, 1, sum)                # Return sum(1/geodist) for each vertex
+            }
+            
+          # Reachability function
+            reachable <- function(g){
+              # Calculating the proportion reacable for each node
+                proportion_reachable <- vector('numeric', nrow(nodes))
+                for(i in seq_along(proportion_reachable)){
+                  # Getting all reachable pairs
+                    reachable_edges <- as.data.frame(sna::reachability(g, return.as.edgelist = TRUE))
+                  
+                  # Isolating ego network
+                    ego_net <- reachable_edges[(reachable_edges$V1 == nodes[i, 1]), ]
+                  
+                  # Elminating Self-Loops
+                    ego_net <- ego_net[(ego_net$V1 != ego_net$V2), ]
+                  
+                  # Calculating the proportion reachable
+                    proportion_reachable[[i]] <- nrow(ego_net)/nrow(nodes)
+                    rm(reachable_edges, ego_net)
+                }
+                
+              # Writing to global environment
+                assign(x = 'reachability', value = proportion_reachable,.GlobalEnv)  
+            }
+            
+          # Function calculating Burt's constraint measure
+            constraint <- function(g) {
+              # Creating output vector for constraint scores
+                constraint_scores <- vector('numeric', nrow(nodes))
+                
+              # Calculating each node's constraint score
+                for(i in seq_along(constraint_scores)){
+                  # Isolating ego-network
+                    dati <- (sna::ego.extract(g, ego = nodes[i, 1], neighborhood = c("combined")))[[1]]
+                
+                  # Calculating ego's constraint
+                    idego <- which(rownames(dati)==nodes[i, 1])
+                    n <- dim(dati)[1]
+                    S <- rep(0,n)
+                    for( j in 1:n)  for( y in setdiff(1:n,j)) S[j] <- S[j] + (dati[j,y] + dati[y,j])
+                
+                    Pij <- dati
+                    Pij[,] <- NA
+                    for(j in 1:n ){
+                      for(k in setdiff(1:n,j) ){
+                        Pij[j,k] <- (dati[j,k] + dati[k,j])/ S[j]
+                      }
+                    }
+                
+                    pp <- rep(0,n)
+                    for (j in setdiff(1:n,idego) )
+                      for (q in setdiff(1:n,c(idego,j) ) )
+                        pp[j] <- pp[j] + Pij[idego,q]*Pij[q,j]
+                    constraint_scores[[i]] <- sum((Pij[idego,] + pp)^2,na.rm=T)
+              }
+            }
           
-            total_degree <- sna::degree(g, gmode=gmode, cmode='freeman')
+            total_degree <- sna::degree(g, gmode=gmode, cmode='freeman', ignore.eval=TRUE)
+            weighted_degree <- sna::degree(g, gmode=gmode, cmode='freeman', ignore.eval=FALSE)
             in_degree <- sna::degree(g, gmode=gmode, cmode='indegree')
             out_degree <- sna::degree(g, gmode=gmode, cmode='outdegree')
-            closeness <- sna::closeness(g, gmode=gmode, cmode="gil-schmidt")
+            closeness <- closeness(g)
             betweenness <- sna::betweenness(g, gmode=gmode, cmode=cmode)
-            bonpow <- as.numeric(sna::bonpow(g, gmode=gmode))
+            bonpow <- as.numeric(sna::bonpow(g, gmode=gmode, exponent = 0.75))
             eigen_cen <- sna::evcent(g, gmode=gmode)
-            nodes <- as.data.frame(cbind(nodes, total_degree, in_degree, out_degree, closeness, betweenness, bonpow, eigen_cen))
+            
+            reachability <- reachable(g)
+            
+            nodes <- as.data.frame(cbind(nodes, total_degree, weighted_degree, in_degree, out_degree, 
+                                         closeness, betweenness, bonpow, eigen_cen, reachability))
         }else{
           edgelist <- edgelist[,]
         }
@@ -665,6 +769,38 @@ netread(package='network', network_object=network)
   plot(net_2)
   
 # Network Diagnostics (Two pane figure displaying system and node-level measures)
+  
+# Burt's constraint score based on egonet implmentation
+  constraint <- function(g) {
+    # Creating output vector for constraint scores
+      constraint_scores <- vector('numeric', nrow(nodes))
+    
+    # Calculating each node's constraint score
+      for(i in seq_along(constraint_scores)){
+        # Isolating ego-network
+          dati <- (sna::ego.extract(g, ego = nodes[i, 1], neighborhood = c("combined")))[[1]]
+      
+        # Calculating ego's constraint
+          idego <- which(rownames(dati)==nodes[i, 1])
+          n <- dim(dati)[1]
+          S <- rep(0,n)
+          for( j in 1:n)  for( y in setdiff(1:n,j)) S[j] <- S[j] + (dati[j,y] + dati[y,j])
+      
+          Pij <- dati
+          Pij[,] <- NA
+          for(j in 1:n ){
+            for(k in setdiff(1:n,j) ){
+              Pij[j,k] <- (dati[j,k] + dati[k,j])/ S[j]
+            }
+          }
+      
+          pp <- rep(0,n)
+          for (j in setdiff(1:n,idego) )
+            for (q in setdiff(1:n,c(idego,j) ) )
+              pp[j] <- pp[j] + Pij[idego,q]*Pij[q,j]
+              constraint_scores[[i]] <- sum((Pij[idego,] + pp)^2,na.rm=T)
+            }
+  }
   
 
 
