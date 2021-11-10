@@ -124,7 +124,7 @@ base_data <- import_data('ahs_wpvar')
       
       # Generating Network Object
         if (package == 'igraph') {
-          if(directed == TRUE){
+          if(as.logical(directed) == TRUE){
             # Generating directed graph
               g <- igraph::graph_from_adjacency_matrix(adjacency_matrix, mode=c('directed'), diag = TRUE)
               
@@ -190,6 +190,97 @@ base_data <- import_data('ahs_wpvar')
               
               nodes <- as.data.frame(cbind(nodes, total_degree, weighted_degree, in_degree, out_degree, 
                                            closeness, betweenness, bonpow, eigen_cen, constraint, reachability))
+              
+            # Extracting the largest weakly connected component
+              largest_weak_component <- function(g){
+                # Isolating the graph's components
+                  components <- igraph::clusters(g, mode="weak")
+                  biggest_cluster_id <- which.max(components$csize)
+                
+                # Extracting the ids of the largest component
+                  largest_component_ids <- igraph::V(g)[components$membership == biggest_cluster_id]
+                
+                # Extracting Subgraph
+                  largest_component <- igraph::induced_subgraph(g, largest_component_ids)
+                
+                # Assigning the ID list and Subgraph to the Global Environment
+                  assign(x = 'largest_component_ids', value = largest_component_ids,.GlobalEnv) 
+                  assign(x = 'largest_component', value = largest_component,.GlobalEnv) 
+              }
+              
+            # Extracting the largest bi-component
+              largest_bicomponent <- function(g) {
+                # Extracting bi-components
+                  bi_components <- igraph::biconnected_components(g)
+                  bi_component_list <- as.list(bi_components$components)
+                  bi_lengths <- unlist(lapply(bi_component_list, function(x) length(x)))
+                  bi_lengths <- cbind(as.data.frame(seq(1, length(bi_lengths), 1)), bi_lengths)
+                  colnames(bi_lengths) <- c('list_id', 'length')
+                  largest_id <- bi_lengths[(bi_lengths$length == max(bi_lengths$length)), 1]
+                  largest_bicomp_ids <- sort(bi_component_list[[largest_id]])
+                  rm(bi_components, bi_component_list, bi_lengths, largest_id)
+                
+                # Extracting Subgraph
+                  largest_bi_component <- igraph::induced_subgraph(g, largest_bicomp_ids)
+                
+                # Assigning the ID list and Subgraph to the Global Environment
+                  assign(x = 'largest_bicomponent_ids', value = largest_bicomp_ids,.GlobalEnv) 
+                  assign(x = 'largest_bi_component', value = largest_bi_component,.GlobalEnv) 
+              }
+              
+            # Calculating the Proportion of Two-Step Path that Are Also One-Step Paths
+              trans_rate <- function(g) {
+                # Isolating One-Step Paths
+                  one_step_paths <- vector('list', nrow(nodes))
+                  names(one_step_paths) <- nodes$id
+                  for(i in seq_along(one_step_paths)){
+                    one_step_paths[[i]] <- as.integer(names(igraph::neighborhood(g, order=1, mindist = 1, igraph::V(g)[[i]], mode='all')[[1]]))
+                  }
+                
+                # Isolating Two-Step Paths
+                  two_step_paths <- vector('list', nrow(nodes))
+                  names(two_step_paths) <- nodes$id
+                  for(i in seq_along(two_step_paths)){
+                    paths <- vector('list', length(one_step_paths[[i]])   )
+                    if(names(igraph::V(g))[[1]] == "0"){
+                      for(j in seq_along(paths)) {
+                        paths[[j]] <- as.integer(names(igraph::neighbors(g, (one_step_paths[[i]][[j]] + 1), mode=c('total'))))
+                      }
+                    }else{
+                      for(j in seq_along(paths)) {
+                        paths[[j]] <- as.integer(names(igraph::neighbors(g, (one_step_paths[[i]][[j]]), mode=c('total'))))
+                      }
+                    }
+                    two_step_paths[[i]] <- sort(unique(unlist(paths)))
+                    rm(paths)
+                  }
+                
+                # Calculating the Proportion of Two-Step Path that Are Also One-Step Paths
+                  proportion_two_step <- vector('numeric', length(one_step_paths))
+                  for(i in seq_along(proportion_two_step)) {
+                    # Identifying Nodes that Occur in Both Two and One-Step Paths
+                      shared_paths <- sort(intersect(one_step_paths[[i]], two_step_paths[[i]]))
+                  
+                    # Identifying the proportion of nodes that occur on both paths to the number of one-step paths
+                      proportion_two_step[[i]] <- length(shared_paths)/length(two_step_paths[[i]])
+                  }
+                
+                # Transitivity Rate
+                  transitivity_rate <- sum(proportion_two_step)/length(proportion_two_step)
+                
+                # Assigning transitivity_rate to the global environment
+                  assign(x = 'transitivity_rate', value = transitivity_rate,.GlobalEnv) 
+                  rm(one_step_paths, two_step_paths, proportion_two_step)
+              }   
+              
+            # Calculating System-Level Measures
+              largest_weak_component(g)
+              largest_bicomponent(g)
+              degree_assortatvity <- igraph::assortativity.degree(g, directed=as.logical(directed))
+              reciprocity_rate <- igraph::reciprocity(g, ignore.loops = TRUE, mode='ratio')
+              trans_rate(g)
+              global_clustering_coefficient <- igraph::transitivity(g, type='global')
+              average_path_length <- igraph::average.path.length(g, directed=as.logical(directed))
           }else{
             # Generating undirected graph
               g <- igraph::graph_from_adjacency_matrix(adjacency_matrix, mode=c('undirected'), diag = FALSE)
@@ -256,9 +347,100 @@ base_data <- import_data('ahs_wpvar')
               
               nodes <- as.data.frame(cbind(nodes, total_degree, weighted_degree, in_degree, out_degree, 
                                            closeness, betweenness, bonpow, eigen_cen, constraint, reachability))
+              
+            # Extracting the largest weakly connected component
+              largest_weak_component <- function(g){
+                # Isolating the graph's components
+                  components <- igraph::clusters(g, mode="weak")
+                  biggest_cluster_id <- which.max(components$csize)
+                
+                # Extracting the ids of the largest component
+                  largest_component_ids <- igraph::V(g)[components$membership == biggest_cluster_id]
+                
+                # Extracting Subgraph
+                  largest_component <- igraph::induced_subgraph(g, largest_component_ids)
+                
+                # Assigning the ID list and Subgraph to the Global Environment
+                  assign(x = 'largest_component_ids', value = largest_component_ids,.GlobalEnv) 
+                  assign(x = 'largest_component', value = largest_component,.GlobalEnv) 
+              }
+            
+            # Extracting the largest bi-component
+              largest_bicomponent <- function(g) {
+                # Extracting bi-components
+                  bi_components <- igraph::biconnected_components(g)
+                  bi_component_list <- as.list(bi_components$components)
+                  bi_lengths <- unlist(lapply(bi_component_list, function(x) length(x)))
+                  bi_lengths <- cbind(as.data.frame(seq(1, length(bi_lengths), 1)), bi_lengths)
+                  colnames(bi_lengths) <- c('list_id', 'length')
+                  largest_id <- bi_lengths[(bi_lengths$length == max(bi_lengths$length)), 1]
+                  largest_bicomp_ids <- sort(bi_component_list[[largest_id]])
+                  rm(bi_components, bi_component_list, bi_lengths, largest_id)
+                
+                # Extracting Subgraph
+                  largest_bi_component <- igraph::induced_subgraph(g, largest_bicomp_ids)
+                
+                # Assigning the ID list and Subgraph to the Global Environment
+                  assign(x = 'largest_bicomponent_ids', value = largest_bicomp_ids,.GlobalEnv) 
+                  assign(x = 'largest_bi_component', value = largest_bi_component,.GlobalEnv) 
+              }
+              
+            # Calculating the Proportion of Two-Step Path that Are Also One-Step Paths
+              trans_rate <- function(g) {
+                # Isolating One-Step Paths
+                  one_step_paths <- vector('list', nrow(nodes))
+                  names(one_step_paths) <- nodes$id
+                  for(i in seq_along(one_step_paths)){
+                    one_step_paths[[i]] <- as.integer(names(igraph::neighborhood(g, order=1, mindist = 1, igraph::V(g)[[i]], mode='all')[[1]]))
+                  }
+                
+                # Isolating Two-Step Paths
+                  two_step_paths <- vector('list', nrow(nodes))
+                  names(two_step_paths) <- nodes$id
+                  for(i in seq_along(two_step_paths)){
+                    paths <- vector('list', length(one_step_paths[[i]]))
+                    if(names(igraph::V(g))[[1]] == "0"){
+                      for(j in seq_along(paths)) {
+                        paths[[j]] <- as.integer(names(igraph::neighbors(g, (one_step_paths[[i]][[j]] + 1), mode=c('total'))))
+                      }
+                    }else{
+                      for(j in seq_along(paths)) {
+                        paths[[j]] <- as.integer(names(igraph::neighbors(g, (one_step_paths[[i]][[j]]), mode=c('total'))))
+                      }
+                    }
+                    two_step_paths[[i]] <- sort(unique(unlist(paths)))
+                    rm(paths)
+                  }
+                
+                # Calculating the Proportion of Two-Step Path that Are Also One-Step Paths
+                  proportion_two_step <- vector('numeric', length(one_step_paths))
+                  for(i in seq_along(proportion_two_step)) {
+                    # Identifying Nodes that Occur in Both Two and One-Step Paths
+                      shared_paths <- sort(intersect(one_step_paths[[i]], two_step_paths[[i]]))
+                  
+                    # Identifying the proportion of nodes that occur on both paths to the number of one-step paths
+                      proportion_two_step[[i]] <- length(shared_paths)/length(two_step_paths[[i]])
+                  }
+                
+                # Transitivity Rate
+                  transitivity_rate <- sum(proportion_two_step)/length(proportion_two_step)
+                
+                # Assigning transitivity_rate to the global environment
+                  assign(x = 'transitivity_rate', value = transitivity_rate,.GlobalEnv) 
+                  rm(one_step_paths, two_step_paths, proportion_two_step)
+              }  
+              
+            # Calculating System-Level Measures
+              largest_weak_component(g)
+              largest_bicomponent(g)
+              degree_assortatvity <- igraph::assortativity.degree(g, directed=as.logical(directed))
+              reciprocity_rate <- igraph::reciprocity(g, ignore.loops = TRUE, mode='ratio')
+              trans_rate(g)
+              global_clustering_coefficient <- igraph::transitivity(g, type='global')
+              average_path_length <- igraph::average.path.length(g, directed=as.logical(directed))
           }
         }else if (package == 'network'){
-          if(directed == TRUE){
+          if(as.logical(directed) == TRUE){
             # Outputting a directed graph
               g <- network::as.network(adjacency_matrix, matrix.type = "adjacency", directed = TRUE)
             
@@ -350,6 +532,148 @@ base_data <- import_data('ahs_wpvar')
               
               nodes <- as.data.frame(cbind(nodes, total_degree, weighted_degree, in_degree, out_degree, 
                                            closeness, betweenness, bonpow, eigen_cen, constraint, reachability))
+              
+            # Extracting the largest weakly connected component
+              largest_weak_component <- function(g){
+                # Identifying Largest Component IDs
+                  largest_component_ids <- sna::component.largest(g,connected="weak", result='membership')
+                  largest_component_ids <- cbind(nodes[1], largest_component_ids)
+                  largest_component_ids <- largest_component_ids[(largest_component_ids$largest_component_ids == TRUE), ]
+                
+                # Extracting Largest Component as a It's Own Graph
+                  lgc <- sna::component.largest(g,connected="weak", result='graph')
+                  largest_component <- network::as.network(lgc, matrix.type = "adjacency", directed = as.logical(directed))
+                  rm(lgc)
+                
+                # Assigning Objects to the Global Environment
+                  assign(x = 'largest_component_ids', value = largest_component_ids,.GlobalEnv) 
+                  assign(x = 'largest_component', value = largest_component,.GlobalEnv) 
+              }
+              
+            # Extracting the largest bi-component
+              largest_bicomponent <- function(g) {
+                # Identifying largest weak bi-component
+                  bi_components <- sna::bicomponent.dist(g, symmetrize=c('weak'))
+                  bi_components <- bi_components$members
+                  bi_component_sizes <- as.numeric(lapply(bi_components, FUN=length))
+                  bi_component_sizes <- cbind(as.data.frame(bi_component_sizes), seq(1, length(bi_component_sizes), 1))
+                  colnames(bi_component_sizes)[[2]] <- c('component_id')
+                  bi_component_sizes <- bi_component_sizes[(bi_component_sizes$bi_component_sizes == max(bi_component_sizes$bi_component_sizes)), 2]
+                  bi_components <- bi_components[[bi_component_sizes]]
+                  rm(bi_component_sizes)
+                
+                # Creating ID list
+                  bi_component_ids <- as.data.frame(bi_components)
+                  bi_component_ids$largest_bi_component <- as.logical(c('TRUE'))
+                  colnames(bi_component_ids)[[1]] <- c('id')
+                
+                # Inducing sub-graph 
+                  largest_bi_component <- network::get.inducedSubgraph(g, bi_components)
+                
+                # Assigning the ID list and Subgraph to the Global Environment
+                  assign(x = 'largest_bicomponent_ids', value = bi_component_ids,.GlobalEnv) 
+                  assign(x = 'largest_bi_component', value = largest_bi_component,.GlobalEnv) 
+                  rm(bi_components)
+              } 
+              
+            # Calculating Degree Assortativity (Assuming Assortativity Based on Total Degree)
+              assortativity_degree <- function(g) {
+                # Extracting the graph's edgelist
+                  edges <- as.data.frame(network::as.edgelist(g, directed=as.logical(directed), loops=FALSE))
+                  colnames(edges) <- c('i_id', 'j_id')
+                
+                # Calculating the total degree for each node
+                  node_degree <- sna::degree(g, gmode=gmode, cmode='freeman', ignore.eval=TRUE)
+                  node_degree <- as.data.frame(cbind(seq(1, length(node_degree), 1), node_degree))
+                
+                # Joining i & j ids
+                  colnames(node_degree)[[1]] <- colnames(edges)[[1]]
+                  edges <- dplyr::left_join(edges, node_degree, by=colnames(edges)[[1]])
+                  colnames(edges)[[3]] <- c('i_degree')
+                
+                  colnames(node_degree)[[1]] <- colnames(edges)[[2]]
+                  edges <- dplyr::left_join(edges, node_degree, by=colnames(edges)[[2]])
+                  colnames(edges)[[4]] <- c('j_degree')
+                  rm(node_degree)
+                
+                # Calculating the Pearson Correlation of i and j degree variables
+                  degree_assortatvity <- stats::cor(edges$i_degree, edges$j_degree, method='pearson')
+                
+                # Assigning correlation value to the global environment
+                  assign(x = 'degree_assortatvity', value = degree_assortatvity,.GlobalEnv)
+              }
+              
+            # Calculating the Proportion of Two-Step Path that Are Also One-Step Paths
+              trans_rate <- function(g) {
+                # Isolating One-Step Paths
+                  one_step_paths <- vector('list', nrow(nodes))
+                  names(one_step_paths) <- nodes$id
+                  for(i in seq_along(one_step_paths)){
+                    one_step_paths[[i]] <- network::get.neighborhood(g, nodes[i,1], type=c('combined'))
+                  }
+                
+                # Isolating Two-Step Paths
+                  two_step_paths <- vector('list', nrow(nodes))
+                  names(two_step_paths) <- nodes$id
+                  for(i in seq_along(two_step_paths)){
+                    paths <- vector('list', length(one_step_paths[[i]]))
+                    for(j in seq_along(one_step_paths[[i]])) {
+                      paths[[j]] <- network::get.neighborhood(g, one_step_paths[[i]][[j]], type=c('combined'))
+                    }
+                    paths <- sort(unique(unlist(paths)))
+                    two_step_paths[[i]] <- paths
+                    rm(paths)
+                  }
+                
+                # Identifying Shared Paths & Getting the Length
+                  shared_paths <- vector('list', nrow(nodes))
+                  for(i in seq_along(shared_paths)) {
+                    shared_paths[[i]] <- length(sort(intersect(as.integer(one_step_paths[[i]]), as.integer(two_step_paths[[i]]))))
+                  }
+                  shared_paths <- as.numeric(unlist(shared_paths))
+                
+                # Getting the Number of Two-Step Paths
+                  two_step_paths <- lapply(two_step_paths, function(x) length(x))
+                  two_step_paths <- as.numeric(unlist(two_step_paths))
+                
+                # Calculating the Proportion of Two-Step Path that Are Also One-Step Path
+                  proportion_two_step <- shared_paths/two_step_paths
+                
+                # Transitivity Rate
+                  transitivity_rate <- sum(proportion_two_step)/length(proportion_two_step)
+                
+                # Assigning transitivity_rate to the global environment
+                  assign(x = 'transitivity_rate', value = transitivity_rate,.GlobalEnv) 
+                  rm(one_step_paths, two_step_paths, proportion_two_step, shared_paths)
+              }
+              
+            # Calculating the Average Geodesic Distance
+              average_geodesic <- function(g) {
+                # Generating the number and lengths of all geodesics between all nodes
+                  gd <- sna::geodist(g)
+                
+                # Extracting the distances
+                  geodesics <- gd$gdist
+                
+                # Replacing infinite values with 0 for the purposes of calculating the average
+                  geodesics[is.infinite(geodesics)] <- 0
+                
+                # Calculating the average shortest path length
+                  average_path_length <- mean(geodesics)
+                
+                # Assgining to the global environment       
+                  assign(x = 'average_path_length', value = average_path_length,.GlobalEnv) 
+                  rm(gd, geodesics)
+              }
+              
+            # Calculating System-Level Measures
+              largest_weak_component(g)
+              largest_bicomponent(g)
+              assortativity_degree(g)
+              reciprocity_rate <- sna::grecip(g, measure='edgewise')
+              trans_rate(g)
+              global_clustering_coefficient <- sna::gtrans(g,mode=gmode, measure='weak')
+              average_geodesic(g)
           }else{
             # Outputting undirected graph
               g <- network::as.network(adjacency_matrix, matrix.type = "adjacency", directed = FALSE)
@@ -442,6 +766,148 @@ base_data <- import_data('ahs_wpvar')
               
               nodes <- as.data.frame(cbind(nodes, total_degree, weighted_degree, in_degree, out_degree, 
                                            closeness, betweenness, bonpow, eigen_cen, constraint, reachability))
+              
+            # Extracting the largest weakly connected component
+              largest_weak_component <- function(g){
+                # Identifying Largest Component IDs
+                  largest_component_ids <- sna::component.largest(g,connected="weak", result='membership')
+                  largest_component_ids <- cbind(nodes[1], largest_component_ids)
+                  largest_component_ids <- largest_component_ids[(largest_component_ids$largest_component_ids == TRUE), ]
+                
+                # Extracting Largest Component as a It's Own Graph
+                  lgc <- sna::component.largest(g,connected="weak", result='graph')
+                  largest_component <- network::as.network(lgc, matrix.type = "adjacency", directed = as.logical(directed))
+                  rm(lgc)
+                
+                # Assigning Objects to the Global Environment
+                  assign(x = 'largest_component_ids', value = largest_component_ids,.GlobalEnv) 
+                  assign(x = 'largest_component', value = largest_component,.GlobalEnv) 
+              }
+            
+            # Extracting the largest bi-component
+              largest_bicomponent <- function(g) {
+                # Identifying largest weak bi-component
+                  bi_components <- sna::bicomponent.dist(g, symmetrize=c('weak'))
+                  bi_components <- bi_components$members
+                  bi_component_sizes <- as.numeric(lapply(bi_components, FUN=length))
+                  bi_component_sizes <- cbind(as.data.frame(bi_component_sizes), seq(1, length(bi_component_sizes), 1))
+                  colnames(bi_component_sizes)[[2]] <- c('component_id')
+                  bi_component_sizes <- bi_component_sizes[(bi_component_sizes$bi_component_sizes == max(bi_component_sizes$bi_component_sizes)), 2]
+                  bi_components <- bi_components[[bi_component_sizes]]
+                  rm(bi_component_sizes)
+                
+                # Creating ID list
+                  bi_component_ids <- as.data.frame(bi_components)
+                  bi_component_ids$largest_bi_component <- as.logical(c('TRUE'))
+                  colnames(bi_component_ids)[[1]] <- c('id')
+                
+                # Inducing sub-graph 
+                  largest_bi_component <- network::get.inducedSubgraph(g, bi_components)
+                
+                # Assigning the ID list and Subgraph to the Global Environment
+                  assign(x = 'largest_bicomponent_ids', value = bi_component_ids,.GlobalEnv) 
+                  assign(x = 'largest_bi_component', value = largest_bi_component,.GlobalEnv) 
+                  rm(bi_components)
+              } 
+              
+            # Calculating Degree Assortativity (Assuming Assortativity Based on Total Degree)
+              assortativity_degree <- function(g) {
+                # Extracting the graph's edgelist
+                  edges <- as.data.frame(network::as.edgelist(g, directed=as.logical(directed), loops=FALSE))
+                  colnames(edges) <- c('i_id', 'j_id')
+                
+                # Calculating the total degree for each node
+                  node_degree <- sna::degree(g, gmode=gmode, cmode='freeman', ignore.eval=TRUE)
+                  node_degree <- as.data.frame(cbind(seq(1, length(node_degree), 1), node_degree))
+                
+                # Joining i & j ids
+                  colnames(node_degree)[[1]] <- colnames(edges)[[1]]
+                  edges <- dplyr::left_join(edges, node_degree, by=colnames(edges)[[1]])
+                  colnames(edges)[[3]] <- c('i_degree')
+                
+                  colnames(node_degree)[[1]] <- colnames(edges)[[2]]
+                  edges <- dplyr::left_join(edges, node_degree, by=colnames(edges)[[2]])
+                  colnames(edges)[[4]] <- c('j_degree')
+                  rm(node_degree)
+                
+                # Calculating the Pearson Correlation of i and j degree variables
+                  degree_assortatvity <- stats::cor(edges$i_degree, edges$j_degree, method='pearson')
+                
+                # Assigning correlation value to the global environment
+                  assign(x = 'degree_assortatvity', value = degree_assortatvity,.GlobalEnv)
+              }
+              
+            # Calculating the Proportion of Two-Step Path that Are Also One-Step Paths
+              trans_rate <- function(g) {
+                # Isolating One-Step Paths
+                  one_step_paths <- vector('list', nrow(nodes))
+                  names(one_step_paths) <- nodes$id
+                  for(i in seq_along(one_step_paths)){
+                    one_step_paths[[i]] <- network::get.neighborhood(g, nodes[i,1], type=c('combined'))
+                  }
+                
+                # Isolating Two-Step Paths
+                  two_step_paths <- vector('list', nrow(nodes))
+                  names(two_step_paths) <- nodes$id
+                  for(i in seq_along(two_step_paths)){
+                    paths <- vector('list', length(one_step_paths[[i]]))
+                    for(j in seq_along(one_step_paths[[i]])) {
+                      paths[[j]] <- network::get.neighborhood(g, one_step_paths[[i]][[j]], type=c('combined'))
+                    }
+                    paths <- sort(unique(unlist(paths)))
+                    two_step_paths[[i]] <- paths
+                    rm(paths)
+                  }
+                
+                # Identifying Shared Paths & Getting the Length
+                  shared_paths <- vector('list', nrow(nodes))
+                  for(i in seq_along(shared_paths)) {
+                    shared_paths[[i]] <- length(sort(intersect(as.integer(one_step_paths[[i]]), as.integer(two_step_paths[[i]]))))
+                  }
+                  shared_paths <- as.numeric(unlist(shared_paths))
+                
+                # Getting the Number of Two-Step Paths
+                  two_step_paths <- lapply(two_step_paths, function(x) length(x))
+                  two_step_paths <- as.numeric(unlist(two_step_paths))
+                
+                # Calculating the Proportion of Two-Step Path that Are Also One-Step Path
+                  proportion_two_step <- shared_paths/two_step_paths
+                
+                # Transitivity Rate
+                  transitivity_rate <- sum(proportion_two_step)/length(proportion_two_step)
+                
+                # Assigning transitivity_rate to the global environment
+                  assign(x = 'transitivity_rate', value = transitivity_rate,.GlobalEnv) 
+                  rm(one_step_paths, two_step_paths, proportion_two_step, shared_paths)
+              }
+              
+            # Calculating the Average Geodesic Distance
+              average_geodesic <- function(g) {
+                # Generating the number and lengths of all geodesics between all nodes
+                  gd <- sna::geodist(g)
+                
+                # Extracting the distances
+                  geodesics <- gd$gdist
+                
+                # Replacing infinite values with 0 for the purposes of calculating the average
+                  geodesics[is.infinite(geodesics)] <- 0
+                
+                # Calculating the average shortest path length
+                average_path_length <- mean(geodesics)
+                
+                # Assgining to the global environment       
+                  assign(x = 'average_path_length', value = average_path_length,.GlobalEnv) 
+                  rm(gd, geodesics)
+              }
+              
+            # Calculating System-Level Measures
+              largest_weak_component(g)
+              largest_bicomponent(g)
+              assortativity_degree(g)
+              reciprocity_rate <- sna::grecip(g, measure='edgewise')
+              trans_rate(g)
+              global_clustering_coefficient <- sna::gtrans(g,mode=gmode, measure='weak')
+              average_geodesic(g)
           }
         }else{
           print('Network package not supported.')
@@ -538,6 +1004,97 @@ base_data <- import_data('ahs_wpvar')
             
             nodes <- as.data.frame(cbind(nodes, total_degree, weighted_degree, in_degree, out_degree, 
                                          closeness, betweenness, bonpow, eigen_cen, constraint, reachability))
+            
+          # Extracting the largest weakly connected component
+            largest_weak_component <- function(g){
+              # Isolating the graph's components
+                components <- igraph::clusters(g, mode="weak")
+                biggest_cluster_id <- which.max(components$csize)
+              
+              # Extracting the ids of the largest component
+                largest_component_ids <- igraph::V(g)[components$membership == biggest_cluster_id]
+              
+              # Extracting Subgraph
+                largest_component <- igraph::induced_subgraph(g, largest_component_ids)
+              
+              # Assigning the ID list and Subgraph to the Global Environment
+                assign(x = 'largest_component_ids', value = largest_component_ids,.GlobalEnv) 
+                assign(x = 'largest_component', value = largest_component,.GlobalEnv) 
+            }
+            
+          # Extracting the largest bi-component
+            largest_bicomponent <- function(g) {
+              # Extracting bi-components
+                bi_components <- igraph::biconnected_components(g)
+                bi_component_list <- as.list(bi_components$components)
+                bi_lengths <- unlist(lapply(bi_component_list, function(x) length(x)))
+                bi_lengths <- cbind(as.data.frame(seq(1, length(bi_lengths), 1)), bi_lengths)
+                colnames(bi_lengths) <- c('list_id', 'length')
+                largest_id <- bi_lengths[(bi_lengths$length == max(bi_lengths$length)), 1]
+                largest_bicomp_ids <- sort(bi_component_list[[largest_id]])
+                rm(bi_components, bi_component_list, bi_lengths, largest_id)
+              
+              # Extracting Subgraph
+                largest_bi_component <- igraph::induced_subgraph(g, largest_bicomp_ids)
+              
+              # Assigning the ID list and Subgraph to the Global Environment
+                assign(x = 'largest_bicomponent_ids', value = largest_bicomp_ids,.GlobalEnv) 
+                assign(x = 'largest_bi_component', value = largest_bi_component,.GlobalEnv) 
+            }
+            
+          # Calculating the Proportion of Two-Step Path that Are Also One-Step Paths
+            trans_rate <- function(g) {
+              # Isolating One-Step Paths
+                one_step_paths <- vector('list', nrow(nodes))
+                names(one_step_paths) <- nodes$id
+                for(i in seq_along(one_step_paths)){
+                  one_step_paths[[i]] <- as.integer(names(igraph::neighborhood(g, order=1, mindist = 1, igraph::V(g)[[i]], mode='all')[[1]]))
+                }
+              
+              # Isolating Two-Step Paths
+                two_step_paths <- vector('list', nrow(nodes))
+                names(two_step_paths) <- nodes$id
+                for(i in seq_along(two_step_paths)){
+                  paths <- vector('list', length(one_step_paths[[i]]))
+                  if(names(igraph::V(g))[[1]] == "0"){
+                    for(j in seq_along(paths)) {
+                      paths[[j]] <- as.integer(names(igraph::neighbors(g, (one_step_paths[[i]][[j]] + 1), mode=c('total'))))
+                    }
+                  }else{
+                    for(j in seq_along(paths)) {
+                      paths[[j]] <- as.integer(names(igraph::neighbors(g, (one_step_paths[[i]][[j]]), mode=c('total'))))
+                    }
+                  }
+                  two_step_paths[[i]] <- sort(unique(unlist(paths)))
+                  rm(paths)
+                }
+              
+              # Calculating the Proportion of Two-Step Path that Are Also One-Step Paths
+                proportion_two_step <- vector('numeric', length(one_step_paths))
+                for(i in seq_along(proportion_two_step)) {
+                  # Identifying Nodes that Occur in Both Two and One-Step Paths
+                    shared_paths <- sort(intersect(one_step_paths[[i]], two_step_paths[[i]]))
+                
+                  # Identifying the proportion of nodes that occur on both paths to the number of one-step paths
+                    proportion_two_step[[i]] <- length(shared_paths)/length(two_step_paths[[i]])
+                }
+              
+              # Transitivity Rate
+                transitivity_rate <- sum(proportion_two_step)/length(proportion_two_step)
+              
+              # Assigning transitivity_rate to the global environment
+                assign(x = 'transitivity_rate', value = transitivity_rate,.GlobalEnv) 
+                rm(one_step_paths, two_step_paths, proportion_two_step)
+            }  
+            
+          # Calculating System-Level Measures
+            largest_weak_component(g)
+            largest_bicomponent(g)
+            degree_assortatvity <- igraph::assortativity.degree(g, directed=as.logical(directed))
+            reciprocity_rate <- igraph::reciprocity(g, ignore.loops = TRUE, mode='ratio')
+            trans_rate(g)
+            global_clustering_coefficient <- igraph::transitivity(g, type='global')
+            average_path_length <- igraph::average.path.length(g, directed=as.logical(directed))
         }else if (package == 'network') {
           # Getting Edgelist: iGraph
             edges <- as.data.frame(igraph::as_edgelist(g, names=FALSE))
@@ -648,6 +1205,148 @@ base_data <- import_data('ahs_wpvar')
             
             nodes <- as.data.frame(cbind(nodes, total_degree, weighted_degree, in_degree, out_degree, 
                                          closeness, betweenness, bonpow, eigen_cen, constraint, reachability))
+            
+          # Extracting the largest weakly connected component
+            largest_weak_component <- function(g){
+              # Identifying Largest Component IDs
+                largest_component_ids <- sna::component.largest(g,connected="weak", result='membership')
+                largest_component_ids <- cbind(nodes[1], largest_component_ids)
+                largest_component_ids <- largest_component_ids[(largest_component_ids$largest_component_ids == TRUE), ]
+              
+              # Extracting Largest Component as a It's Own Graph
+                lgc <- sna::component.largest(g,connected="weak", result='graph')
+                largest_component <- network::as.network(lgc, matrix.type = "adjacency", directed = as.logical(directed))
+                rm(lgc)
+              
+              # Assigning Objects to the Global Environment
+                assign(x = 'largest_component_ids', value = largest_component_ids,.GlobalEnv) 
+                assign(x = 'largest_component', value = largest_component,.GlobalEnv) 
+            }
+          
+          # Extracting the largest bi-component
+            largest_bicomponent <- function(g) {
+              # Identifying largest weak bi-component
+                bi_components <- sna::bicomponent.dist(g, symmetrize=c('weak'))
+                bi_components <- bi_components$members
+                bi_component_sizes <- as.numeric(lapply(bi_components, FUN=length))
+                bi_component_sizes <- cbind(as.data.frame(bi_component_sizes), seq(1, length(bi_component_sizes), 1))
+                colnames(bi_component_sizes)[[2]] <- c('component_id')
+                bi_component_sizes <- bi_component_sizes[(bi_component_sizes$bi_component_sizes == max(bi_component_sizes$bi_component_sizes)), 2]
+                bi_components <- bi_components[[bi_component_sizes]]
+                rm(bi_component_sizes)
+              
+              # Creating ID list
+                bi_component_ids <- as.data.frame(bi_components)
+                bi_component_ids$largest_bi_component <- as.logical(c('TRUE'))
+                colnames(bi_component_ids)[[1]] <- c('id')
+              
+              # Inducing sub-graph 
+                largest_bi_component <- network::get.inducedSubgraph(g, bi_components)
+              
+              # Assigning the ID list and Subgraph to the Global Environment
+                assign(x = 'largest_bicomponent_ids', value = bi_component_ids,.GlobalEnv) 
+                assign(x = 'largest_bi_component', value = largest_bi_component,.GlobalEnv) 
+                rm(bi_components)
+            } 
+          
+          # Calculating Degree Assortativity (Assuming Assortativity Based on Total Degree)
+            assortativity_degree <- function(g) {
+              # Extracting the graph's edgelist
+                edges <- as.data.frame(network::as.edgelist(g, directed=as.logical(directed), loops=FALSE))
+                colnames(edges) <- c('i_id', 'j_id')
+              
+              # Calculating the total degree for each node
+                node_degree <- sna::degree(g, gmode=gmode, cmode='freeman', ignore.eval=TRUE)
+                node_degree <- as.data.frame(cbind(seq(1, length(node_degree), 1), node_degree))
+              
+              # Joining i & j ids
+                colnames(node_degree)[[1]] <- colnames(edges)[[1]]
+                edges <- dplyr::left_join(edges, node_degree, by=colnames(edges)[[1]])
+                colnames(edges)[[3]] <- c('i_degree')
+              
+                colnames(node_degree)[[1]] <- colnames(edges)[[2]]
+                edges <- dplyr::left_join(edges, node_degree, by=colnames(edges)[[2]])
+                colnames(edges)[[4]] <- c('j_degree')
+                rm(node_degree)
+              
+              # Calculating the Pearson Correlation of i and j degree variables
+                degree_assortatvity <- stats::cor(edges$i_degree, edges$j_degree, method='pearson')
+              
+              # Assigning correlation value to the global environment
+                assign(x = 'degree_assortatvity', value = degree_assortatvity,.GlobalEnv)
+            }
+            
+          # Calculating the Proportion of Two-Step Path that Are Also One-Step Paths
+            trans_rate <- function(g) {
+              # Isolating One-Step Paths
+                one_step_paths <- vector('list', nrow(nodes))
+                names(one_step_paths) <- nodes$id
+                for(i in seq_along(one_step_paths)){
+                  one_step_paths[[i]] <- network::get.neighborhood(g, nodes[i,1], type=c('combined'))
+                }
+              
+              # Isolating Two-Step Paths
+                two_step_paths <- vector('list', nrow(nodes))
+                names(two_step_paths) <- nodes$id
+                for(i in seq_along(two_step_paths)){
+                  paths <- vector('list', length(one_step_paths[[i]]))
+                  for(j in seq_along(one_step_paths[[i]])) {
+                    paths[[j]] <- network::get.neighborhood(g, one_step_paths[[i]][[j]], type=c('combined'))
+                  }
+                  paths <- sort(unique(unlist(paths)))
+                  two_step_paths[[i]] <- paths
+                  rm(paths)
+                }
+              
+              # Identifying Shared Paths & Getting the Length
+                shared_paths <- vector('list', nrow(nodes))
+                for(i in seq_along(shared_paths)) {
+                  shared_paths[[i]] <- length(sort(intersect(as.integer(one_step_paths[[i]]), as.integer(two_step_paths[[i]]))))
+                }
+                shared_paths <- as.numeric(unlist(shared_paths))
+              
+              # Getting the Number of Two-Step Paths
+                two_step_paths <- lapply(two_step_paths, function(x) length(x))
+                two_step_paths <- as.numeric(unlist(two_step_paths))
+              
+              # Calculating the Proportion of Two-Step Path that Are Also One-Step Path
+                proportion_two_step <- shared_paths/two_step_paths
+              
+              # Transitivity Rate
+              transitivity_rate <- sum(proportion_two_step)/length(proportion_two_step)
+              
+              # Assigning transitivity_rate to the global environment
+                assign(x = 'transitivity_rate', value = transitivity_rate,.GlobalEnv) 
+                rm(one_step_paths, two_step_paths, proportion_two_step, shared_paths)
+            }
+          
+          # Calculating the Average Geodesic Distance
+            average_geodesic <- function(g) {
+              # Generating the number and lengths of all geodesics between all nodes
+                gd <- sna::geodist(g)
+              
+              # Extracting the distances
+                geodesics <- gd$gdist
+              
+              # Replacing infinite values with 0 for the purposes of calculating the average
+                geodesics[is.infinite(geodesics)] <- 0
+              
+              # Calculating the average shortest path length
+                average_path_length <- mean(geodesics)
+              
+              # Assgining to the global environment       
+                assign(x = 'average_path_length', value = average_path_length,.GlobalEnv) 
+                rm(gd, geodesics)
+            }
+            
+          # Calculating System-Level Measures
+            largest_weak_component(g)
+            largest_bicomponent(g)
+            assortativity_degree(g)
+            reciprocity_rate <- sna::grecip(g, measure='edgewise')
+            trans_rate(g)
+            global_clustering_coefficient <- sna::gtrans(g,mode=gmode, measure='weak')
+            average_geodesic(g)
         }else {
           print('Network package not supported.')
         }
@@ -843,8 +1542,14 @@ base_data <- import_data('ahs_wpvar')
                 names(two_step_paths) <- nodes$id
                 for(i in seq_along(two_step_paths)){
                   paths <- vector('list', length(one_step_paths[[i]]))
-                  for(j in seq_along(paths)) {
-                    paths[[j]] <- as.integer(names(igraph::neighbors(g, (one_step_paths[[i]][[j]] + 1), mode=c('total'))))
+                  if(names(igraph::V(g))[[1]] == "0"){
+                    for(j in seq_along(paths)) {
+                      paths[[j]] <- as.integer(names(igraph::neighbors(g, (one_step_paths[[i]][[j]] + 1), mode=c('total'))))
+                    }
+                  }else{
+                    for(j in seq_along(paths)) {
+                      paths[[j]] <- as.integer(names(igraph::neighbors(g, (one_step_paths[[i]][[j]]), mode=c('total'))))
+                    }
                   }
                   two_step_paths[[i]] <- sort(unique(unlist(paths)))
                   rm(paths)
@@ -886,7 +1591,7 @@ base_data <- import_data('ahs_wpvar')
                         subnets <- vector('list', length(types))
                         names(subnets) <- types
                         for(i in seq_along(types)){
-                          subnets[[i]] <- as.data.frame(edgelist[(type == types[[i]]), ])
+                          subnets[[i]] <- as.data.frame(edges[(type == types[[i]]), ])
                           subnets[[i]] <- subnets[[i]][,c('i_id', 'j_id', 'type', 'weight')]
                           colnames(subnets[[i]])[[3]] <- names(subnets)[[i]]
                           colnames(subnets[[i]])[[4]] <- paste0(colnames(subnets[[i]])[[3]],'_',colnames(subnets[[i]])[[4]])
@@ -999,7 +1704,7 @@ base_data <- import_data('ahs_wpvar')
           # Calculating System-Level Measures
             largest_weak_component(g)
             largest_bicomponent(g)
-            degree_assortatvity <- igraph::assortativity.degree(g)
+            degree_assortatvity <- igraph::assortativity.degree(g, directed=as.logical(directed))
             reciprocity_rate <- igraph::reciprocity(g, ignore.loops = TRUE, mode='ratio')
             trans_rate(g)
             global_clustering_coefficient <- igraph::transitivity(g, type='global')
@@ -1152,6 +1857,33 @@ base_data <- import_data('ahs_wpvar')
                 rm(bi_components)
             } 
             
+          # Calculating Degree Assortativity (Assuming Assortativity Based on Total Degree)
+            assortativity_degree <- function(g) {
+              # Extracting the graph's edgelist
+                edges <- as.data.frame(network::as.edgelist(g, directed=as.logical(directed), loops=FALSE))
+                colnames(edges) <- c('i_id', 'j_id')
+              
+              # Calculating the total degree for each node
+                node_degree <- sna::degree(g, gmode=gmode, cmode='freeman', ignore.eval=TRUE)
+                node_degree <- as.data.frame(cbind(seq(1, length(node_degree), 1), node_degree))
+              
+              # Joining i & j ids
+                colnames(node_degree)[[1]] <- colnames(edges)[[1]]
+                edges <- dplyr::left_join(edges, node_degree, by=colnames(edges)[[1]])
+                colnames(edges)[[3]] <- c('i_degree')
+              
+                colnames(node_degree)[[1]] <- colnames(edges)[[2]]
+                edges <- dplyr::left_join(edges, node_degree, by=colnames(edges)[[2]])
+                colnames(edges)[[4]] <- c('j_degree')
+                rm(node_degree)
+              
+              # Calculating the Pearson Correlation of i and j degree variables
+                degree_assortatvity <- stats::cor(edges$i_degree, edges$j_degree, method='pearson')
+              
+              # Assigning correlation value to the global environment
+                assign(x = 'degree_assortatvity', value = degree_assortatvity,.GlobalEnv)
+            }
+            
           # Calculating the Proportion of Two-Step Path that Are Also One-Step Paths
             trans_rate <- function(g) {
               # Isolating One-Step Paths
@@ -1196,6 +1928,25 @@ base_data <- import_data('ahs_wpvar')
                 rm(one_step_paths, two_step_paths, proportion_two_step, shared_paths)
             }
             
+          # Calculating the Average Geodesic Distance
+            average_geodesic <- function(g) {
+              # Generating the number and lengths of all geodesics between all nodes
+                gd <- sna::geodist(g)
+                
+              # Extracting the distances
+                geodesics <- gd$gdist
+                
+              # Replacing infinite values with 0 for the purposes of calculating the average
+                geodesics[is.infinite(geodesics)] <- 0
+                
+              # Calculating the average shortest path length
+                average_path_length <- mean(geodesics)
+                
+              # Assgining to the global environment       
+                assign(x = 'average_path_length', value = average_path_length,.GlobalEnv) 
+                rm(gd, geodesics)
+            }
+            
           # Calculating Multiplex Edge Correlation
             multiplex_edge_corr <- function(edgelist, type, directed) {
               if(type[[1]] != FALSE){
@@ -1214,7 +1965,7 @@ base_data <- import_data('ahs_wpvar')
                         subnets <- vector('list', length(types))
                         names(subnets) <- types
                         for(i in seq_along(types)){
-                          subnets[[i]] <- as.data.frame(edgelist[(type == types[[i]]), ])
+                          subnets[[i]] <- as.data.frame(edges[(type == types[[i]]), ])
                           subnets[[i]] <- subnets[[i]][,c('i_id', 'j_id', 'type', 'weight')]
                           colnames(subnets[[i]])[[3]] <- names(subnets)[[i]]
                           colnames(subnets[[i]])[[4]] <- paste0(colnames(subnets[[i]])[[3]],'_',colnames(subnets[[i]])[[4]])
@@ -1235,7 +1986,7 @@ base_data <- import_data('ahs_wpvar')
                           multiplex_edge_correlation <- paste0('Edge Correlation for ', paste(column_set, collapse= ' and '), ': ',stats::cor(tie_set)[1,2])
                           rm(column_set, tie_set)
                       }
-                      rm(pairs, types, subnets, ties)
+                        rm(pairs, types, subnets, ties)
                   }else{
                     # Creating a separate edgelist (Symmetric Edges) to Perform Operations
                       s_edges <- edges[,c('i_id', 'j_id', 'type', 'weight')]
@@ -1327,11 +2078,12 @@ base_data <- import_data('ahs_wpvar')
           # Calculating System-Level Measures
             largest_weak_component(g)
             largest_bicomponent(g)
-            
-            
+            assortativity_degree(g)
+            reciprocity_rate <- sna::grecip(g, measure='edgewise')
             trans_rate(g)
-            
-            multiplex_edge_corr(edgelist, type, directed)
+            global_clustering_coefficient <- sna::gtrans(g,mode=gmode, measure='weak')
+            average_geodesic(g)
+            multiplex_edge_corr(edgelist, type, as.logical(directed))
                 
         }else{
           edgelist <- edgelist[,]
@@ -1347,14 +2099,19 @@ base_data <- import_data('ahs_wpvar')
 # Edgelist Example
   netwrite(data_type = c('edgelist'), adjacency_matrix=FALSE, adjacency_list=FALSE,
            nodelist=FALSE, i_elements=community_2$ego_nid, j_elements=community_2$alter_id, weights=FALSE,
-           package='igraph', missing_code=99999, weight_type='frequency', 
+           type=FALSE, package='igraph', missing_code=99999, weight_type='frequency', 
            directed='TRUE', net_name='net_1')
   
   plot(net_1)
   
+# Creating a type vector for the purposes of test netwrite's multiplex edge correlation function
+  types <- c(1, 2)
+  type <- sample(types, dim(edgelist)[[1]], replace=TRUE)
+  rm(types)
+  
   netwrite(data_type = c('edgelist'), adjacency_matrix=FALSE, adjacency_list=FALSE,
            nodelist=FALSE, i_elements=community_2$ego_nid, j_elements=community_2$alter_id, weights=FALSE,
-           package='network', missing_code=99999, weight_type='frequency', 
+           type=type, package='network', missing_code=99999, weight_type='frequency', 
            directed='TRUE', net_name='net_2')
   
   plot(net_2)
@@ -1363,14 +2120,14 @@ base_data <- import_data('ahs_wpvar')
   adj_mat <- as.matrix(net_2, matrix.type="adjacency")
   
   netwrite(data_type = c('adjacency_matrix'), adjacency_matrix=adj_mat, adjacency_list=FALSE,
-           nodelist=FALSE, i_elements=FALSE, j_elements=FALSE, weights=FALSE,
+           nodelist=FALSE, i_elements=FALSE, j_elements=FALSE, weights=FALSE, type=FALSE,
            package='igraph', missing_code=99999, weight_type='frequency', 
            directed='TRUE', net_name='net_3')
   
   plot(net_3)
   
   netwrite(data_type = c('adjacency_matrix'), adjacency_matrix=adj_mat, adjacency_list=FALSE,
-           nodelist=FALSE, i_elements=FALSE, j_elements=FALSE, weights=FALSE,
+           nodelist=FALSE, i_elements=FALSE, j_elements=FALSE, weights=FALSE, type=FALSE,
            package='network', missing_code=99999, weight_type='frequency', 
            directed='TRUE', net_name='net_4')
   
@@ -1392,14 +2149,14 @@ base_data <- import_data('ahs_wpvar')
   colnames(adj_list) <- c('ego', 'alters')
   
   netwrite(data_type = c('adjacency_list'), adjacency_matrix=FALSE, adjacency_list=adj_list,
-           nodelist=FALSE, i_elements=FALSE, j_elements=FALSE, weights=FALSE,
+           nodelist=FALSE, i_elements=FALSE, j_elements=FALSE, weights=FALSE, type=FALSE,
            package='network', missing_code=99999, weight_type='frequency', 
            directed='TRUE', net_name='net_5')
   
   plot(net_5)
   
   netwrite(data_type = c('adjacency_list'), adjacency_matrix=FALSE, adjacency_list=adj_list,
-           nodelist=FALSE, i_elements=FALSE, j_elements=FALSE, weights=FALSE,
+           nodelist=FALSE, i_elements=FALSE, j_elements=FALSE, weights=FALSE, type=FALSE,
            package='igraph', missing_code=99999, weight_type='frequency', 
            directed='TRUE', net_name='net_6')
   
