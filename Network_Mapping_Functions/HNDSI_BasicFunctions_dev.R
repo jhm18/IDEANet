@@ -100,8 +100,6 @@ base_data <- import_data('ahs_wpvar')
   # Diameter
   # Flow Hiearchy (Directed): Flow hierarchy is defined as the fraction of edges not participating in cycles in a directed graph
   
-# Need to add type option for multiplex networks.
-  
   netwrite <- function(data_type = c('edgelist'), adjacency_matrix=FALSE, adjacency_list=FALSE,
                        nodelist=FALSE, i_elements=FALSE, j_elements=FALSE, weights=FALSE, type=FALSE,
                        package='igraph', missing_code=99999, weight_type='frequency', 
@@ -234,21 +232,32 @@ base_data <- import_data('ahs_wpvar')
                   one_step_paths <- vector('list', nrow(nodes))
                   names(one_step_paths) <- nodes$id
                   for(i in seq_along(one_step_paths)){
-                    one_step_paths[[i]] <- as.integer(names(igraph::neighborhood(g, order=1, mindist = 1, igraph::V(g)[[i]], mode='all')[[1]]))
+                    if(length(names(igraph::V(g))) == length(igraph::V(g)) ){
+                      one_step_paths[[i]] <- as.integer(names(igraph::neighborhood(g, order=1, mindist = 1, igraph::V(g)[[i]], mode='all')[[1]]))
+                    }else{
+                      one_step_paths[[i]] <- as.integer(igraph::neighborhood(g, order=1, mindist = 1, igraph::V(g)[[i]], mode='all')[[1]])
+                    }
                   }
                 
                 # Isolating Two-Step Paths
                   two_step_paths <- vector('list', nrow(nodes))
                   names(two_step_paths) <- nodes$id
                   for(i in seq_along(two_step_paths)){
-                    paths <- vector('list', length(one_step_paths[[i]])   )
-                    if(names(igraph::V(g))[[1]] == "0"){
-                      for(j in seq_along(paths)) {
-                        paths[[j]] <- as.integer(names(igraph::neighbors(g, (one_step_paths[[i]][[j]] + 1), mode=c('total'))))
+                    paths <- vector('list', length(one_step_paths[[i]]))
+                    # If a named nodelist else an unnamed list
+                    if(length(names(igraph::V(g))) == length(igraph::V(g))){
+                      if(names(igraph::V(g))[[1]] == "0"){
+                        for(j in seq_along(paths)) {
+                          paths[[j]] <- as.integer(names(igraph::neighbors(g, (one_step_paths[[i]][[j]] + 1), mode=c('total'))))
+                        }
+                      }else{
+                        for(j in seq_along(paths)) {
+                          paths[[j]] <- as.integer(names(igraph::neighbors(g, (one_step_paths[[i]][[j]]), mode=c('total'))))
+                        }
                       }
                     }else{
                       for(j in seq_along(paths)) {
-                        paths[[j]] <- as.integer(names(igraph::neighbors(g, (one_step_paths[[i]][[j]]), mode=c('total'))))
+                        paths[[j]] <- as.integer(igraph::neighbors(g, (one_step_paths[[i]][[j]]), mode=c('total')))
                       }
                     }
                     two_step_paths[[i]] <- sort(unique(unlist(paths)))
@@ -271,7 +280,7 @@ base_data <- import_data('ahs_wpvar')
                 # Assigning transitivity_rate to the global environment
                   assign(x = 'transitivity_rate', value = transitivity_rate,.GlobalEnv) 
                   rm(one_step_paths, two_step_paths, proportion_two_step)
-              }   
+              }  
               
             # Calculating System-Level Measures
               largest_weak_component(g)
@@ -391,7 +400,11 @@ base_data <- import_data('ahs_wpvar')
                   one_step_paths <- vector('list', nrow(nodes))
                   names(one_step_paths) <- nodes$id
                   for(i in seq_along(one_step_paths)){
-                    one_step_paths[[i]] <- as.integer(names(igraph::neighborhood(g, order=1, mindist = 1, igraph::V(g)[[i]], mode='all')[[1]]))
+                    if(length(names(igraph::V(g))) == length(igraph::V(g)) ){
+                      one_step_paths[[i]] <- as.integer(names(igraph::neighborhood(g, order=1, mindist = 1, igraph::V(g)[[i]], mode='all')[[1]]))
+                    }else{
+                      one_step_paths[[i]] <- as.integer(igraph::neighborhood(g, order=1, mindist = 1, igraph::V(g)[[i]], mode='all')[[1]])
+                    }
                   }
                 
                 # Isolating Two-Step Paths
@@ -399,13 +412,20 @@ base_data <- import_data('ahs_wpvar')
                   names(two_step_paths) <- nodes$id
                   for(i in seq_along(two_step_paths)){
                     paths <- vector('list', length(one_step_paths[[i]]))
-                    if(names(igraph::V(g))[[1]] == "0"){
-                      for(j in seq_along(paths)) {
-                        paths[[j]] <- as.integer(names(igraph::neighbors(g, (one_step_paths[[i]][[j]] + 1), mode=c('total'))))
+                    # If a named nodelist else an unnamed list
+                    if(length(names(igraph::V(g))) == length(igraph::V(g))){
+                      if(names(igraph::V(g))[[1]] == "0"){
+                        for(j in seq_along(paths)) {
+                          paths[[j]] <- as.integer(names(igraph::neighbors(g, (one_step_paths[[i]][[j]] + 1), mode=c('total'))))
+                        }
+                      }else{
+                        for(j in seq_along(paths)) {
+                          paths[[j]] <- as.integer(names(igraph::neighbors(g, (one_step_paths[[i]][[j]]), mode=c('total'))))
+                        }
                       }
                     }else{
                       for(j in seq_along(paths)) {
-                        paths[[j]] <- as.integer(names(igraph::neighbors(g, (one_step_paths[[i]][[j]]), mode=c('total'))))
+                        paths[[j]] <- as.integer(igraph::neighbors(g, (one_step_paths[[i]][[j]]), mode=c('total')))
                       }
                     }
                     two_step_paths[[i]] <- sort(unique(unlist(paths)))
@@ -919,7 +939,7 @@ base_data <- import_data('ahs_wpvar')
     }else if(data_type == 'adjacency_list'){
       # Is the adjacency list a list
         if(class(adjacency_list) == 'list'){
-          g <- igraph::graph_from_adj_list(adj_list, mode="out")
+          g <- igraph::graph_from_adj_list(adjacency_list, mode="out")
         }else{
           # Converting to a list
             adj_list <- vector('list', dim(adjacency_list)[[1]])
@@ -1048,7 +1068,11 @@ base_data <- import_data('ahs_wpvar')
                 one_step_paths <- vector('list', nrow(nodes))
                 names(one_step_paths) <- nodes$id
                 for(i in seq_along(one_step_paths)){
-                  one_step_paths[[i]] <- as.integer(names(igraph::neighborhood(g, order=1, mindist = 1, igraph::V(g)[[i]], mode='all')[[1]]))
+                  if(length(names(igraph::V(g))) == length(igraph::V(g)) ){
+                    one_step_paths[[i]] <- as.integer(names(igraph::neighborhood(g, order=1, mindist = 1, igraph::V(g)[[i]], mode='all')[[1]]))
+                  }else{
+                    one_step_paths[[i]] <- as.integer(igraph::neighborhood(g, order=1, mindist = 1, igraph::V(g)[[i]], mode='all')[[1]])
+                  }
                 }
               
               # Isolating Two-Step Paths
@@ -1056,19 +1080,26 @@ base_data <- import_data('ahs_wpvar')
                 names(two_step_paths) <- nodes$id
                 for(i in seq_along(two_step_paths)){
                   paths <- vector('list', length(one_step_paths[[i]]))
-                  if(names(igraph::V(g))[[1]] == "0"){
-                    for(j in seq_along(paths)) {
-                      paths[[j]] <- as.integer(names(igraph::neighbors(g, (one_step_paths[[i]][[j]] + 1), mode=c('total'))))
+                  # If a named nodelist else an unamed list
+                  if(length(names(igraph::V(g))) == length(igraph::V(g))){
+                    if(names(igraph::V(g))[[1]] == "0"){
+                      for(j in seq_along(paths)) {
+                        paths[[j]] <- as.integer(names(igraph::neighbors(g, (one_step_paths[[i]][[j]] + 1), mode=c('total'))))
+                      }
+                    }else{
+                      for(j in seq_along(paths)) {
+                        paths[[j]] <- as.integer(names(igraph::neighbors(g, (one_step_paths[[i]][[j]]), mode=c('total'))))
+                      }
                     }
                   }else{
                     for(j in seq_along(paths)) {
-                      paths[[j]] <- as.integer(names(igraph::neighbors(g, (one_step_paths[[i]][[j]]), mode=c('total'))))
+                      paths[[j]] <- as.integer(igraph::neighbors(g, (one_step_paths[[i]][[j]]), mode=c('total')))
                     }
                   }
                   two_step_paths[[i]] <- sort(unique(unlist(paths)))
                   rm(paths)
                 }
-              
+                
               # Calculating the Proportion of Two-Step Path that Are Also One-Step Paths
                 proportion_two_step <- vector('numeric', length(one_step_paths))
                 for(i in seq_along(proportion_two_step)) {
@@ -1534,21 +1565,32 @@ base_data <- import_data('ahs_wpvar')
                 one_step_paths <- vector('list', nrow(nodes))
                 names(one_step_paths) <- nodes$id
                 for(i in seq_along(one_step_paths)){
-                  one_step_paths[[i]] <- as.integer(names(igraph::neighborhood(g, order=1, mindist = 1, igraph::V(g)[[i]], mode='all')[[1]]))
+                  if(length(names(igraph::V(g))) == length(igraph::V(g)) ){
+                    one_step_paths[[i]] <- as.integer(names(igraph::neighborhood(g, order=1, mindist = 1, igraph::V(g)[[i]], mode='all')[[1]]))
+                  }else{
+                    one_step_paths[[i]] <- as.integer(igraph::neighborhood(g, order=1, mindist = 1, igraph::V(g)[[i]], mode='all')[[1]])
+                  }
                 }
-
+              
               # Isolating Two-Step Paths
                 two_step_paths <- vector('list', nrow(nodes))
                 names(two_step_paths) <- nodes$id
                 for(i in seq_along(two_step_paths)){
                   paths <- vector('list', length(one_step_paths[[i]]))
-                  if(names(igraph::V(g))[[1]] == "0"){
-                    for(j in seq_along(paths)) {
-                      paths[[j]] <- as.integer(names(igraph::neighbors(g, (one_step_paths[[i]][[j]] + 1), mode=c('total'))))
+                  # If a named nodelist else an unnamed list
+                  if(length(names(igraph::V(g))) == length(igraph::V(g))){
+                    if(names(igraph::V(g))[[1]] == "0"){
+                      for(j in seq_along(paths)) {
+                        paths[[j]] <- as.integer(names(igraph::neighbors(g, (one_step_paths[[i]][[j]] + 1), mode=c('total'))))
+                      }
+                    }else{
+                      for(j in seq_along(paths)) {
+                        paths[[j]] <- as.integer(names(igraph::neighbors(g, (one_step_paths[[i]][[j]]), mode=c('total'))))
+                      }
                     }
                   }else{
                     for(j in seq_along(paths)) {
-                      paths[[j]] <- as.integer(names(igraph::neighbors(g, (one_step_paths[[i]][[j]]), mode=c('total'))))
+                      paths[[j]] <- as.integer(igraph::neighbors(g, (one_step_paths[[i]][[j]]), mode=c('total')))
                     }
                   }
                   two_step_paths[[i]] <- sort(unique(unlist(paths)))
@@ -1560,18 +1602,18 @@ base_data <- import_data('ahs_wpvar')
                 for(i in seq_along(proportion_two_step)) {
                   # Identifying Nodes that Occur in Both Two and One-Step Paths
                     shared_paths <- sort(intersect(one_step_paths[[i]], two_step_paths[[i]]))
-                  
+                
                   # Identifying the proportion of nodes that occur on both paths to the number of one-step paths
                     proportion_two_step[[i]] <- length(shared_paths)/length(two_step_paths[[i]])
                 }
-                
+              
               # Transitivity Rate
                 transitivity_rate <- sum(proportion_two_step)/length(proportion_two_step)
-                
+              
               # Assigning transitivity_rate to the global environment
                 assign(x = 'transitivity_rate', value = transitivity_rate,.GlobalEnv) 
                 rm(one_step_paths, two_step_paths, proportion_two_step)
-            }   
+            }  
             
           # Calculating Multiplex Edge Correlation
             multiplex_edge_corr <- function(edgelist, type, directed) {
@@ -2102,7 +2144,14 @@ base_data <- import_data('ahs_wpvar')
            type=FALSE, package='igraph', missing_code=99999, weight_type='frequency', 
            directed='TRUE', net_name='net_1')
   
+  par(mar=c(0,0,0,0))
   plot(net_1)
+  
+  par(mar=c(0,0,0,0))
+  plot(largest_component)
+  
+  par(mar=c(0,0,0,0))
+  plot(largest_bi_component)
   
 # Creating a type vector for the purposes of test netwrite's multiplex edge correlation function
   types <- c(1, 2)
@@ -2114,8 +2163,15 @@ base_data <- import_data('ahs_wpvar')
            type=type, package='network', missing_code=99999, weight_type='frequency', 
            directed='TRUE', net_name='net_2')
   
+  par(mar=c(0,0,0,0))
   plot(net_2)
-
+  
+  par(mar=c(0,0,0,0))
+  plot(largest_component)
+  
+  par(mar=c(0,0,0,0))
+  plot(largest_bi_component)
+  
 # Adjacency Matrix Example
   adj_mat <- as.matrix(net_2, matrix.type="adjacency")
   
@@ -2124,6 +2180,7 @@ base_data <- import_data('ahs_wpvar')
            package='igraph', missing_code=99999, weight_type='frequency', 
            directed='TRUE', net_name='net_3')
   
+  par(mar=c(0,0,0,0))
   plot(net_3)
   
   netwrite(data_type = c('adjacency_matrix'), adjacency_matrix=adj_mat, adjacency_list=FALSE,
@@ -2131,6 +2188,7 @@ base_data <- import_data('ahs_wpvar')
            package='network', missing_code=99999, weight_type='frequency', 
            directed='TRUE', net_name='net_4')
   
+  par(mar=c(0,0,0,0))
   plot(net_4)
   
 # Adjacency List Example
@@ -2153,6 +2211,7 @@ base_data <- import_data('ahs_wpvar')
            package='network', missing_code=99999, weight_type='frequency', 
            directed='TRUE', net_name='net_5')
   
+  par(mar=c(0,0,0,0))
   plot(net_5)
   
   netwrite(data_type = c('adjacency_list'), adjacency_matrix=FALSE, adjacency_list=adj_list,
@@ -2160,6 +2219,7 @@ base_data <- import_data('ahs_wpvar')
            package='igraph', missing_code=99999, weight_type='frequency', 
            directed='TRUE', net_name='net_6')
   
+  par(mar=c(0,0,0,0))
   plot(net_6)
   
 ###############
