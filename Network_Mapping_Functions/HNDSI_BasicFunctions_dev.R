@@ -92,13 +92,8 @@ base_data <- import_data('ahs_wpvar')
 
 # Currently Supported Packages (Will Add Pajek, ORA, UCINet, etc)
   support_packages <- c('igraph', 'network')
-
-# System Measures to Implement
-  # Degree Distribution
-  # Number of Components 
-  # Proportion Largest Component
-  # Diameter
-  # Flow Hiearchy (Directed): Flow hierarchy is defined as the fraction of edges not participating in cycles in a directed graph
+  
+# Add Default Visualzation and System-Level Measure output object
   
   netwrite <- function(data_type = c('edgelist'), adjacency_matrix=FALSE, adjacency_list=FALSE,
                        nodelist=FALSE, i_elements=FALSE, j_elements=FALSE, weights=FALSE, type=FALSE,
@@ -670,13 +665,14 @@ base_data <- import_data('ahs_wpvar')
             # Calculating the Average Geodesic Distance
               average_geodesic <- function(g) {
                 # Generating the number and lengths of all geodesics between all nodes
-                  gd <- sna::geodist(g)
+                  gd <- sna::geodist(g, count.paths = FALSE)
                 
                 # Extracting the distances
                   geodesics <- gd$gdist
+                  geodesics <- geodesics[(lower.tri(geodesics))]
                 
                 # Replacing infinite values with 0 for the purposes of calculating the average
-                  geodesics[is.infinite(geodesics)] <- 0
+                  geodesics <- geodesics[!is.infinite(geodesics)]
                 
                 # Calculating the average shortest path length
                   average_path_length <- mean(geodesics)
@@ -690,7 +686,7 @@ base_data <- import_data('ahs_wpvar')
               largest_weak_component(g)
               largest_bicomponent(g)
               assortativity_degree(g)
-              reciprocity_rate <- sna::grecip(g, measure='edgewise')
+              reciprocity_rate <- sna::grecip(g, measure='dyadic.nonnull')
               trans_rate(g)
               global_clustering_coefficient <- sna::gtrans(g,mode=gmode, measure='weak')
               average_geodesic(g)
@@ -904,13 +900,14 @@ base_data <- import_data('ahs_wpvar')
             # Calculating the Average Geodesic Distance
               average_geodesic <- function(g) {
                 # Generating the number and lengths of all geodesics between all nodes
-                  gd <- sna::geodist(g)
+                  gd <- sna::geodist(g, count.paths = FALSE)
                 
                 # Extracting the distances
                   geodesics <- gd$gdist
+                  geodesics <- geodesics[(lower.tri(geodesics))]
                 
                 # Replacing infinite values with 0 for the purposes of calculating the average
-                  geodesics[is.infinite(geodesics)] <- 0
+                  geodesics <- geodesics[!is.infinite(geodesics)]
                 
                 # Calculating the average shortest path length
                 average_path_length <- mean(geodesics)
@@ -924,7 +921,7 @@ base_data <- import_data('ahs_wpvar')
               largest_weak_component(g)
               largest_bicomponent(g)
               assortativity_degree(g)
-              reciprocity_rate <- sna::grecip(g, measure='edgewise')
+              reciprocity_rate <- sna::grecip(g, measure='dyadic.nonnull')
               trans_rate(g)
               global_clustering_coefficient <- sna::gtrans(g,mode=gmode, measure='weak')
               average_geodesic(g)
@@ -1354,13 +1351,14 @@ base_data <- import_data('ahs_wpvar')
           # Calculating the Average Geodesic Distance
             average_geodesic <- function(g) {
               # Generating the number and lengths of all geodesics between all nodes
-                gd <- sna::geodist(g)
+                gd <- sna::geodist(g, count.paths = FALSE)
               
               # Extracting the distances
                 geodesics <- gd$gdist
-              
+                geodesics <- geodesics[(lower.tri(geodesics))]
+                
               # Replacing infinite values with 0 for the purposes of calculating the average
-                geodesics[is.infinite(geodesics)] <- 0
+                geodesics <- geodesics[!is.infinite(geodesics)]
               
               # Calculating the average shortest path length
                 average_path_length <- mean(geodesics)
@@ -1374,7 +1372,7 @@ base_data <- import_data('ahs_wpvar')
             largest_weak_component(g)
             largest_bicomponent(g)
             assortativity_degree(g)
-            reciprocity_rate <- sna::grecip(g, measure='edgewise')
+            reciprocity_rate <- sna::grecip(g, measure='dyadic.nonnull')
             trans_rate(g)
             global_clustering_coefficient <- sna::gtrans(g,mode=gmode, measure='weak')
             average_geodesic(g)
@@ -1750,7 +1748,8 @@ base_data <- import_data('ahs_wpvar')
             reciprocity_rate <- igraph::reciprocity(g, ignore.loops = TRUE, mode='ratio')
             trans_rate(g)
             global_clustering_coefficient <- igraph::transitivity(g, type='global')
-            average_path_length <- igraph::average.path.length(g, directed=as.logical(directed))
+            average_path_length <- igraph::average.path.length(g, directed=as.logical(directed), 
+                                                               unconnected = TRUE)
             multiplex_edge_corr(edgelist= edgelist[,c(3,5,6)], type=type, directed=as.logical(directed))
 
         }else if(package == 'network'){
@@ -1926,7 +1925,7 @@ base_data <- import_data('ahs_wpvar')
                 assign(x = 'degree_assortatvity', value = degree_assortatvity,.GlobalEnv)
             }
             
-          # Calculating the Proportion of Two-Step Path that Are Also One-Step Paths
+          # Calculating the Proportion of Two-Step Paths that Are Also One-Step Paths
             trans_rate <- function(g) {
               # Isolating One-Step Paths
                 one_step_paths <- vector('list', nrow(nodes))
@@ -1973,13 +1972,14 @@ base_data <- import_data('ahs_wpvar')
           # Calculating the Average Geodesic Distance
             average_geodesic <- function(g) {
               # Generating the number and lengths of all geodesics between all nodes
-                gd <- sna::geodist(g)
+                gd <- sna::geodist(g, count.paths = FALSE)
                 
               # Extracting the distances
                 geodesics <- gd$gdist
+                geodesics <- geodesics[(lower.tri(geodesics))]
                 
               # Replacing infinite values with 0 for the purposes of calculating the average
-                geodesics[is.infinite(geodesics)] <- 0
+                geodesics <- geodesics[!is.infinite(geodesics)]
                 
               # Calculating the average shortest path length
                 average_path_length <- mean(geodesics)
@@ -2121,12 +2121,11 @@ base_data <- import_data('ahs_wpvar')
             largest_weak_component(g)
             largest_bicomponent(g)
             assortativity_degree(g)
-            reciprocity_rate <- sna::grecip(g, measure='edgewise')
+            reciprocity_rate <- sna::grecip(g, measure='dyadic.nonnull')
             trans_rate(g)
             global_clustering_coefficient <- sna::gtrans(g,mode=gmode, measure='weak')
             average_geodesic(g)
             multiplex_edge_corr(edgelist, type, as.logical(directed))
-                
         }else{
           edgelist <- edgelist[,]
         }
@@ -2135,6 +2134,114 @@ base_data <- import_data('ahs_wpvar')
         assign(x = 'edgelist', value = edgelist,.GlobalEnv)  
         assign(x = 'nodelist', value = nodes,.GlobalEnv)  
         assign(x = net_name, value = g,.GlobalEnv)
+        
+      # Generating Report
+        # System-Level Data Object
+          if(package =='igraph') {
+            # Creating Component Aggregate Measures
+              num_clusters <- igraph::clusters(g, mode="weak")[[3]]
+              proportion_largest <- max(igraph::clusters(g, mode="weak")[[2]])/nrow(nodes)
+            
+            # Creating system-level data object
+              multiplex_edge_correlation <- ifelse(type==FALSE, 'Singleplex Network', multiplex_edge_correlation)
+            
+              measure_labels <- c('Number of Components', 'Proportion in the Largest Component',
+                                  'Degree Assortativity', 'Reciprocity Rate', 'Transitivity Rate', 
+                                  'Global Clustering Coefficient', 'Average Geodesic', 'Constraint'
+                                  'Multi-Level Edge Correlation')
+              measure_descriptions <- c( 'The number of weak components in the graph', 
+                                        'The proportion of nodes in the largest weak component of the graph',
+                                        'Edgewise correlation of degree', 'The proportion of directed ties that are reciprocated',
+                                        'The proportion of two-step paths that are also one-step paths',
+                                        'The proportion of closed triangles to all triangles', 'The average shortest path length',
+                                        'Multiplex networks edgwise correlation of relations')
+              measures <- c(num_clusters, proportion_largest, degree_assortatvity, reciprocity_rate,
+                            transitivity_rate, global_clustering_coefficient, average_path_length,
+                            multiplex_edge_correlation)
+              system_level_measures <- cbind(measure_labels, measure_descriptions, measures)
+            
+            # Removing node-level and system-level data objects for clarity
+              rm(measure_labels, measure_descriptions, num_clusters, proportion_largest, degree_assortatvity,
+                 reciprocity_rate, transitivity_rate, global_clustering_coefficient, average_path_length,
+                 multiplex_edge_correlation, measures)
+            
+              rm(betweenness, bonpow, closeness, constraint, eigen_cen, in_degree, out_degree,
+                 reachability, total_degree, weighted_degree)
+          }else{
+            # Creating Component Aggregate Measures
+              num_clusters <- sna::components(g, connected='weak')
+              components <- sna::component.largest(g, connected = 'weak', result='membership')
+              proportion_largest <- length(components[components==TRUE])/nrow(nodes)
+              rm(components)
+              
+            # Creating system-level data object
+              multiplex_edge_correlation <- ifelse(type==FALSE, 'Singleplex Network', multiplex_edge_correlation)
+              
+              measure_labels <- c('Number of Components', 'Proportion in the Largest Component',
+                                  'Degree Assortativity', 'Reciprocity Rate', 'Transitivity Rate', 
+                                  'Global Clustering Coefficient', 'Average Geodesic', 'Multi-Level Edge Correlation')
+              measure_descriptions <- c( 'The number of weak components in the graph', 
+                                         'The proportion of nodes in the largest weak component of the graph',
+                                         'Edgewise correlation of degree', 'The proportion of directed ties that are reciprocated',
+                                         'The proportion of two-step paths that are also one-step paths',
+                                         'The proportion of closed triangles to all triangles', 'The average shortest path length',
+                                         'Multiplex networks edgwise correlation of relations')
+              measures <- c(num_clusters, proportion_largest, degree_assortatvity, reciprocity_rate,
+                            transitivity_rate, global_clustering_coefficient, average_path_length,
+                            multiplex_edge_correlation)
+              system_level_measures <- cbind(measure_labels, measure_descriptions, measures)
+              
+            # Removing node-level and system-level data objects for clarity
+              rm(measure_labels, measure_descriptions, num_clusters, proportion_largest, degree_assortatvity,
+                 reciprocity_rate, transitivity_rate, global_clustering_coefficient, average_path_length,
+                 multiplex_edge_correlation, measures)
+              
+              rm(betweenness, bonpow, closeness, constraint, eigen_cen, in_degree, out_degree,
+                 reachability, total_degree, weighted_degree)
+          }
+        
+        # System & Node-Level Visualizations
+          x11(width=10.6806, height=7.30556)
+          
+            # Defining degree distribution coordinates
+              y_axis <- density(nodes$total_degree)$y
+              x_axis <- density(nodes$total_degree)$x
+              coordinates <- cbind(as.data.frame(x_axis), y_axis)
+              coordinates <- coordinates[(coordinates$x_axis >= 0), ]
+              x_axis <- pretty(coordinates$x_axis)
+              y_axis <- pretty(coordinates$y_axis)
+              x_spacer <- x_axis[c(length(x_axis))] - x_axis[c(length(x_axis)-1)]
+              x_spacer <- x_spacer*0.5
+              y_spacer <- y_axis[c(length(y_axis))] - y_axis[c(length(y_axis)-1)]
+              y_spacer <- y_spacer*0.5
+              
+            # Defining Plot Layout
+              
+            # Defining Base Degree Plot
+              par(mar = c(5,6,2,2),  family='HersheySerif')
+              plot(0, type='n', xlab=' ', ylab=' ', xlim=c(min(x_axis), max(x_axis)), 
+                   ylim=c(min(y_axis), max(y_axis)), cex.axis=1.3, family='HersheySerif', 
+                   las=1, main=' ', bty='n')
+              grid(lwd = 2)
+              
+            # Adding Margin Text
+              mtext(side = 1, text = 'Total Degree', col = "black", line = 3, cex = 1.5, family='HersheySerif')
+              mtext(side = 2, text = 'Density', col = "black", line = 4.5, cex = 1.5, family='HersheySerif')
+              
+            # Plotting Degree
+              lines(coordinates$x_axis, coordinates$y_axis, col='brown', lwd=1.5)
+              
+            # Adding Skew and Kurtosis
+              skewness <- moments::skewness(nodes$total_degree)
+              kurtosis <- moments::kurtosis(nodes$total_degree)
+              text(x = (max(x_axis)-x_spacer), y = (max(y_axis)-y_spacer), paste('Skewness',round(skewness, digits=2)), cex=1.3)
+              text(x = (max(x_axis)-x_spacer), y = (max(y_axis)-(y_spacer*2)), paste('Kurtosis',round(kurtosis, digits=2)), cex=1.3)
+              
+            # Adding Title
+              title(c("Total Degree Distribution"), family='serif', cex.main=2)
+        
+      # Assigning Report Elements to the Global Environment
+          
     }
   }
     
