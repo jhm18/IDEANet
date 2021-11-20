@@ -2147,7 +2147,7 @@ base_data <- import_data('ahs_wpvar')
             
               measure_labels <- c('Number of Components', 'Proportion in the Largest Component',
                                   'Degree Assortativity', 'Reciprocity Rate', 'Transitivity Rate', 
-                                  'Global Clustering Coefficient', 'Average Geodesic', 'Constraint'
+                                  'Global Clustering Coefficient', 'Average Geodesic',
                                   'Multi-Level Edge Correlation')
               measure_descriptions <- c( 'The number of weak components in the graph', 
                                         'The proportion of nodes in the largest weak component of the graph',
@@ -2158,7 +2158,7 @@ base_data <- import_data('ahs_wpvar')
               measures <- c(num_clusters, proportion_largest, degree_assortatvity, reciprocity_rate,
                             transitivity_rate, global_clustering_coefficient, average_path_length,
                             multiplex_edge_correlation)
-              system_level_measures <- cbind(measure_labels, measure_descriptions, measures)
+              system_level_measures <- cbind(as.data.frame(measure_labels), measure_descriptions, measures)
             
             # Removing node-level and system-level data objects for clarity
               rm(measure_labels, measure_descriptions, num_clusters, proportion_largest, degree_assortatvity,
@@ -2189,7 +2189,7 @@ base_data <- import_data('ahs_wpvar')
               measures <- c(num_clusters, proportion_largest, degree_assortatvity, reciprocity_rate,
                             transitivity_rate, global_clustering_coefficient, average_path_length,
                             multiplex_edge_correlation)
-              system_level_measures <- cbind(measure_labels, measure_descriptions, measures)
+              system_level_measures <- cbind(as.data.frame(measure_labels), measure_descriptions, measures)
               
             # Removing node-level and system-level data objects for clarity
               rm(measure_labels, measure_descriptions, num_clusters, proportion_largest, degree_assortatvity,
@@ -2202,6 +2202,19 @@ base_data <- import_data('ahs_wpvar')
         
         # System & Node-Level Visualizations
           x11(width=10.6806, height=7.30556)
+          system_plot <- function() {
+            # Creating Layout
+              viz_matrix <- matrix(c(10,10,10,10,10,10,10,10,10,
+                                     2,2,2,3,3,3,0,0,0,
+                                     1,1,1,1,1,1,4,4,4,
+                                     1,1,1,1,1,1,0,0,0,
+                                     1,1,1,1,1,1,5,5,5,
+                                     1,1,1,1,1,1,6,6,6,
+                                     1,1,1,1,1,1,0,0,0,
+                                     1,1,1,1,1,1,9,9,9,
+                                     7,7,7,8,8,8,0,0,0), 
+                                     ncol  = 9, byrow = TRUE)
+              layout(viz_matrix)
           
             # Defining degree distribution coordinates
               y_axis <- density(nodes$total_degree)$y
@@ -2214,8 +2227,6 @@ base_data <- import_data('ahs_wpvar')
               x_spacer <- x_spacer*0.5
               y_spacer <- y_axis[c(length(y_axis))] - y_axis[c(length(y_axis)-1)]
               y_spacer <- y_spacer*0.5
-              
-            # Defining Plot Layout
               
             # Defining Base Degree Plot
               par(mar = c(5,6,2,2),  family='HersheySerif')
@@ -2239,9 +2250,125 @@ base_data <- import_data('ahs_wpvar')
               
             # Adding Title
               title(c("Total Degree Distribution"), family='serif', cex.main=2)
-        
-      # Assigning Report Elements to the Global Environment
+              
+            # Populating Subplots
+              for(i in seq_along(system_level_measures$measure_labels)) {
+                plot_measure <- system_level_measures[i,3]
+                if(type == FALSE) {
+                  plot_measure <- ifelse(i < 8, as.numeric(plot_measure), plot_measure)
+                }else{
+                  plot_meaure <- as.numeric(plot_measure)
+                }
+                
+                plot_measure <- ifelse(i < 8, round(plot_measure, digits=2), plot_measure)
+                  
+                par(mar=c(0,0,0,0), family='serif')
+                plot(0, type='n', xlab=' ', ylab=' ', xlim=c(1,10), 
+                     ylim=c(1,10), axes=FALSE, main='', bty='n')
+                
+                text(x=5, y=9, system_level_measures[i,1], family='serif', font=2, cex=1.3)
+                text(x=5, y=6.5, plot_measure, family='serif', cex=1.5)
+                rm(plot_measure)
+              }
+              
+            # Adding Plot Title
+              par(mar=c(0,0,0,0), family='serif')
+              plot(0, type='n', xlab=' ', ylab=' ', xlim=c(1,10), 
+                   ylim=c(1,10), axes=FALSE, main='', bty='n')
+              text(x=5.5, y=5, 'System-Level Measures', family='serif', font=2, cex=3)
+          } 
           
+          g <- cowplot::as_grob(system_plot)
+          p_1 <- cowplot::ggdraw(g)
+          
+          p_1 
+          
+          node_measures_plot <- function() {
+            # Specifying nicer labels
+              if(directed == TRUE){
+                plot_labels <- c('Weighted Degree', 'In-Degree', 'Out-Degree', 'Closeness', 
+                                 'Betweenness', 'Bonacich Power Centrality', 'Eigenvector Centrality', 
+                                 'Constraint', 'Reachability')
+              }else{
+                plot_labels <- c('Weighted Degree', 'Closeness', 'Betweenness', 'Bonacich Power Centrality',
+                                 'Eigenvector Centrality', 'Constraint', 'Reachability')
+              }
+            
+            # Isolating the measure being visualized based on whether it's directed or not
+              if(directed == TRUE){
+                plot_measures <- names(nodes)[4:length(names(nodes))]
+              }else{
+                plot_measures <- names(nodes)[c(4, 7,8,9,10,11,12)]
+              }
+          
+            # Defining the layout used 
+              if(directed == TRUE){
+                viz_matrix <- matrix(c(10,10,10,10,10,10,10,10,10,
+                                       1,1,1,2,2,2,3,3,3,
+                                       1,1,1,2,2,2,3,3,3,
+                                       1,1,1,2,2,2,3,3,3,
+                                       4,4,4,5,5,5,6,6,6,
+                                       4,4,4,5,5,5,6,6,6,
+                                       4,4,4,5,5,5,6,6,6,
+                                       7,7,7,8,8,8,9,9,9,
+                                       7,7,7,8,8,8,9,9,9,
+                                       7,7,7,8,8,8,9,9,9), 
+                                       ncol  = 9, byrow = TRUE)
+                layout(viz_matrix)
+              }else{
+                viz_matrix <- matrix(c(8,8,8,8,8,8,8,8,8,
+                                       1,1,1,2,2,2,3,3,3,
+                                       1,1,1,2,2,2,3,3,3,
+                                       1,1,1,2,2,2,3,3,3,
+                                       4,4,4,5,5,5,6,6,6,
+                                       4,4,4,5,5,5,6,6,6,
+                                       4,4,4,5,5,5,6,6,6,
+                                       7,7,7,0,0,0,0,0,0,
+                                       7,7,7,0,0,0,0,0,0,
+                                       7,7,7,0,0,0,0,0,0), 
+                                       ncol  = 9, byrow = TRUE)
+                layout(viz_matrix)
+              }
+            
+            # Generating Subplot
+              for(i in seq_along(plot_measures)){
+                # Defining degree distribution coordinates
+                  y_axis <- density(nodes[,plot_measures[[i]]])$y
+                  x_axis <- density(nodes[,plot_measures[[i]]])$x
+                  coordinates <- cbind(as.data.frame(x_axis), y_axis)
+                  coordinates <- coordinates[(coordinates$x_axis >= min(nodes[,plot_measures[[i]]])), ]
+                  x_axis <- pretty(coordinates$x_axis)
+                  y_axis <- pretty(coordinates$y_axis)
+            
+                # Defining Base Degree Plot
+                  par(mar = c(5,6,2,2),  family='HersheySerif')
+                  plot(0, type='n', xlab=' ', ylab=' ', xlim=c(min(x_axis), max(x_axis)), 
+                      ylim=c(min(y_axis), max(y_axis)), cex.axis=1.3, family='HersheySerif', 
+                      las=1, main=' ', bty='n')
+                  grid(lwd = 2)
+            
+                # Adding Margin Text
+                  mtext(side = 1, text = plot_labels[[i]], col = "black", line = 3, cex = 1.3, family='HersheySerif')
+
+                # Plotting Degree
+                  lines(coordinates$x_axis, coordinates$y_axis, col='brown', lwd=1.5)
+              } 
+          
+            # Adding Title
+              par(mar=c(0,0,0,0), family='serif')
+              plot(0, type='n', xlab=' ', ylab=' ', xlim=c(1,10), 
+                   ylim=c(1,10), axes=FALSE, main='', bty='n')
+              text(x=5.5, y=5, 'Node-Level Measures', family='serif', font=2, cex=3)
+          }
+        
+          g <- cowplot::as_grob(node_measures_plot)
+          p_2 <- cowplot::ggdraw(g)
+        
+          p_2
+      
+      # Assigning Report Elements to the Global Environment
+        assign(x = 'system_measure_plot', value = p_1,.GlobalEnv)  
+        assign(x = 'node_measure_plot', value = p_2,.GlobalEnv)
     }
   }
     
