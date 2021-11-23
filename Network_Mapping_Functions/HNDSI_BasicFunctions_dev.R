@@ -6,6 +6,9 @@
 #   netread
 #   netwrite
 
+# Clear Out Console Script
+  cat("\014")
+  
 #########################
 #   GENERAL FUNCTIONS   #
 #########################
@@ -93,15 +96,13 @@ base_data <- import_data('ahs_wpvar')
 # Currently Supported Packages (Will Add Pajek, ORA, UCINet, etc)
   support_packages <- c('igraph', 'network')
   
-# Add Default Visualzation and System-Level Measure output object
-  
   netwrite <- function(data_type = c('edgelist'), adjacency_matrix=FALSE, adjacency_list=FALSE,
                        nodelist=FALSE, i_elements=FALSE, j_elements=FALSE, weights=FALSE, type=FALSE,
                        package='igraph', missing_code=99999, weight_type='frequency', 
-                       directed=TRUE, net_name='network') {
+                       directed=FALSE, net_name='network') {
     
   # Installing Necessary Packages 
-    list.of.packages <- c('dplyr', 'igraph', 'network')
+    list.of.packages <- c('dplyr', 'igraph', 'network', 'ggplot2', 'cowplot', 'moments')
     new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
     if(length(new.packages)) install.packages(new.packages)
     rm(list.of.packages, new.packages)
@@ -457,7 +458,8 @@ base_data <- import_data('ahs_wpvar')
         }else if (package == 'network'){
           if(as.logical(directed) == TRUE){
             # Outputting a directed graph
-              g <- network::as.network(adjacency_matrix, matrix.type = "adjacency", directed = TRUE)
+              g <- network::network(adjacency_matrix, ignore.eval=FALSE,
+                                    names.eval='a')
             
             # Specifying network metric commands
               if (directed == TRUE) {
@@ -469,7 +471,7 @@ base_data <- import_data('ahs_wpvar')
               }
               
             # Extracting nodes
-              edges <- network::as.edgelist(g)
+              edges <- as.matrix(g, matrix.type="edgelist")
               nodes <- as.data.frame(sort(unique(c(edges[,1], edges[,2]))))
               colnames(nodes) <- c('id')
               
@@ -592,10 +594,25 @@ base_data <- import_data('ahs_wpvar')
               } 
               
             # Calculating Degree Assortativity (Assuming Assortativity Based on Total Degree)
-              assortativity_degree <- function(g) {
+              assortativity_degree <- function(edgelist, g) {
                 # Extracting the graph's edgelist
-                  edges <- as.data.frame(network::as.edgelist(g, directed=as.logical(directed), loops=FALSE))
-                  colnames(edges) <- c('i_id', 'j_id')
+                  if(as.logical(directed) == TRUE){
+                    edges <- as.data.frame(edgelist[,c(3,5)])
+                  }else{
+                    edges_1 <- as.data.frame(edgelist[,c(3,5)])
+                    edges_1$Obs_ID <- seq(1, nrow(edges_1), 1)
+                  
+                    edges_2 <- as.data.frame(edgelist[,c(5,3)])
+                    edges_2$Obs_ID <- seq(1, nrow(edges_1), 1)
+                    names(edges_2) <- c('i_id', 'j_id', 'Obs_ID')
+                  
+                    edges <- rbind(edges_1, edges_2)
+                    edges <- edges[order(edges$Obs_ID), ]
+                    edges <- edges[!(edges$i_id == edges$j_id), ]
+                    edges <- edges[, c(1:2)]
+                    
+                    rm(edges_1, edges_2)
+                  }
                 
                 # Calculating the total degree for each node
                   node_degree <- sna::degree(g, gmode=gmode, cmode='freeman', ignore.eval=TRUE)
@@ -685,14 +702,15 @@ base_data <- import_data('ahs_wpvar')
             # Calculating System-Level Measures
               largest_weak_component(g)
               largest_bicomponent(g)
-              assortativity_degree(g)
-              reciprocity_rate <- sna::grecip(g, measure='dyadic.nonnull')
+              assortativity_degree(edgelist, g)
+              reciprocity_rate <- ifelse(as.logical(directed) == TRUE, sna::grecip(g, measure='dyadic.nonnull'), sna::grecip(g, measure='correlation'))
               trans_rate(g)
               global_clustering_coefficient <- sna::gtrans(g,mode=gmode, measure='weak')
               average_geodesic(g)
           }else{
             # Outputting undirected graph
-              g <- network::as.network(adjacency_matrix, matrix.type = "adjacency", directed = FALSE)
+              g <- network::network(adjacency_matrix, ignore.eval=FALSE,
+                                    names.eval='a', directed=TRUE)
             
             # Specifying network metric commands
               if (directed == TRUE) {
@@ -704,9 +722,33 @@ base_data <- import_data('ahs_wpvar')
               }
               
             # Extracting nodes
-              edges <- network::as.edgelist(g)
+              edges <- as.matrix(g, matrix.type="edgelist")
+              edges_1 <- as.data.frame(edges)
+              edges_1$Obs_ID <- seq(1, nrow(edges_1), 1)
+              
+            # Making edgelist symmetric
+              edges_2 <- as.data.frame(edges[,c(2,1)])
+              edges_2$Obs_ID <- seq(1, nrow(edges_1), 1)
+              names(edges_2) <- c('V1', 'V2', 'Obs_ID')
+              
+              edges <- rbind(edges_1, edges_2)
+              edges <- edges[order(edges$Obs_ID), ]
+              edges <- edges[!(edges$V1 == edges$V2), ]
+              edges <- edges[, c(1:2)]
+              rm(edges_1, edges_2)
+              
               nodes <- as.data.frame(sort(unique(c(edges[,1], edges[,2]))))
               colnames(nodes) <- c('id')
+              
+            # Generating undirected graph
+              g <- network::network.initialize(nrow(nodes), directed = as.logical(directed))
+              
+            # Adding Edges
+              el <- edges
+              el[,1] <- as.character(el[,1])
+              el[,2] <- as.character(el[,2])
+              g <- network::add.edges(g, el[,1], el[,2])
+              rm(el)
               
             # Create an alternate closeness function
               closeness <- function(g){           # Create an alternate closeness function!
@@ -827,11 +869,10 @@ base_data <- import_data('ahs_wpvar')
               } 
               
             # Calculating Degree Assortativity (Assuming Assortativity Based on Total Degree)
-              assortativity_degree <- function(g) {
+              assortativity_degree <- function(edgelist, g) {
                 # Extracting the graph's edgelist
-                  edges <- as.data.frame(network::as.edgelist(g, directed=as.logical(directed), loops=FALSE))
-                  colnames(edges) <- c('i_id', 'j_id')
-                
+                  edges <- as.data.frame(edges)
+                  
                 # Calculating the total degree for each node
                   node_degree <- sna::degree(g, gmode=gmode, cmode='freeman', ignore.eval=TRUE)
                   node_degree <- as.data.frame(cbind(seq(1, length(node_degree), 1), node_degree))
@@ -920,8 +961,8 @@ base_data <- import_data('ahs_wpvar')
             # Calculating System-Level Measures
               largest_weak_component(g)
               largest_bicomponent(g)
-              assortativity_degree(g)
-              reciprocity_rate <- sna::grecip(g, measure='dyadic.nonnull')
+              assortativity_degree(edgelist, g)
+              reciprocity_rate <- ifelse(as.logical(directed) == TRUE,sna::grecip(g, measure='dyadic.nonnull'), sna::grecip(g, measure='correlation'))
               trans_rate(g)
               global_clustering_coefficient <- sna::gtrans(g,mode=gmode, measure='weak')
               average_geodesic(g)
@@ -1127,7 +1168,7 @@ base_data <- import_data('ahs_wpvar')
           # Getting Edgelist: iGraph
             edges <- as.data.frame(igraph::as_edgelist(g, names=FALSE))
             colnames(edges) <- c('i_id', 'j_id')
-          
+            
           # Checking if there are edge values
             if (length(igraph::get.edge.attribute(g)) > 0) {
               edge_values <- as.data.frame(igraph::get.edge.attribute(g))
@@ -1135,6 +1176,24 @@ base_data <- import_data('ahs_wpvar')
               rm(edge_values)
             }else{
               edges$weight <- 1
+            }
+            
+          # Making Symmetric if Undirected
+            if(as.logical(directed) ==TRUE) {
+              edges <- edges
+            }else{
+              edges_1 <- as.data.frame(edges)
+              edges_1$Obs_ID <- seq(1, nrow(edges_1), 1)
+              
+              edges_2 <- as.data.frame(edges[,c(2,1,3)])
+              edges_2$Obs_ID <- seq(1, nrow(edges_1), 1)
+              names(edges_2) <- c('i_id', 'j_id', 'weight', 'Obs_ID')
+              
+              edges <- rbind(edges_1, edges_2)
+              edges <- edges[order(edges$Obs_ID), ]
+              edges <- edges[!(edges$i_id == edges$j_id), ]
+              edges <- edges[, c(1:3)]
+              rm(edges_1, edges_2)
             }
           
           # Extracting nodelist
@@ -1278,11 +1337,7 @@ base_data <- import_data('ahs_wpvar')
             } 
           
           # Calculating Degree Assortativity (Assuming Assortativity Based on Total Degree)
-            assortativity_degree <- function(g) {
-              # Extracting the graph's edgelist
-                edges <- as.data.frame(network::as.edgelist(g, directed=as.logical(directed), loops=FALSE))
-                colnames(edges) <- c('i_id', 'j_id')
-              
+            assortativity_degree <- function(edges, g) {
               # Calculating the total degree for each node
                 node_degree <- sna::degree(g, gmode=gmode, cmode='freeman', ignore.eval=TRUE)
                 node_degree <- as.data.frame(cbind(seq(1, length(node_degree), 1), node_degree))
@@ -1290,11 +1345,11 @@ base_data <- import_data('ahs_wpvar')
               # Joining i & j ids
                 colnames(node_degree)[[1]] <- colnames(edges)[[1]]
                 edges <- dplyr::left_join(edges, node_degree, by=colnames(edges)[[1]])
-                colnames(edges)[[3]] <- c('i_degree')
+                colnames(edges)[[4]] <- c('i_degree')
               
                 colnames(node_degree)[[1]] <- colnames(edges)[[2]]
                 edges <- dplyr::left_join(edges, node_degree, by=colnames(edges)[[2]])
-                colnames(edges)[[4]] <- c('j_degree')
+                colnames(edges)[[5]] <- c('j_degree')
                 rm(node_degree)
               
               # Calculating the Pearson Correlation of i and j degree variables
@@ -1371,8 +1426,8 @@ base_data <- import_data('ahs_wpvar')
           # Calculating System-Level Measures
             largest_weak_component(g)
             largest_bicomponent(g)
-            assortativity_degree(g)
-            reciprocity_rate <- sna::grecip(g, measure='dyadic.nonnull')
+            assortativity_degree(edges, g)
+            reciprocity_rate <- ifelse(as.logical(directed) == TRUE, sna::grecip(g, measure='dyadic.nonnull'), sna::grecip(g, measure='correlation'))
             trans_rate(g)
             global_clustering_coefficient <- sna::gtrans(g,mode=gmode, measure='weak')
             average_geodesic(g)
@@ -1649,7 +1704,7 @@ base_data <- import_data('ahs_wpvar')
                         for(i in nrow(pairs)) {
                           column_set <- pairs[i,]
                           tie_set <- ties[,column_set]
-                          multiplex_edge_correlation <- paste0('Edge Correlation for ', paste(column_set, collapse= ' and '), ': ',stats::cor(tie_set)[1,2])
+                          multiplex_edge_correlation <- paste0('Edge Correlation for ', paste(column_set, collapse= ' and '), ': ', round(stats::cor(tie_set)[1,2], digits=2))
                           rm(column_set, tie_set)
                         }
                         rm(pairs, types, subnets, ties)
@@ -1725,7 +1780,7 @@ base_data <- import_data('ahs_wpvar')
                         for(i in nrow(pairs)) {
                           column_set <- pairs[i,]
                           tie_set <- ties[,column_set]
-                          multiplex_edge_correlation <- paste0('Edge Correlation for ', paste(column_set, collapse= ' and '), ': ',stats::cor(tie_set)[1,2])
+                          multiplex_edge_correlation <- paste0('Edge Correlation for ', paste(column_set, collapse= ' and '), ': ', round(stats::cor(tie_set)[1,2], digits=2))
                           rm(column_set, tie_set)
                         }
                         rm(pairs, types, subnets, ties)
@@ -1899,11 +1954,25 @@ base_data <- import_data('ahs_wpvar')
             } 
             
           # Calculating Degree Assortativity (Assuming Assortativity Based on Total Degree)
-            assortativity_degree <- function(g) {
+            assortativity_degree <- function(edgelist, g) {
               # Extracting the graph's edgelist
-                edges <- as.data.frame(network::as.edgelist(g, directed=as.logical(directed), loops=FALSE))
-                colnames(edges) <- c('i_id', 'j_id')
-              
+                if(as.logical(directed) == TRUE){
+                  edges <- as.data.frame(edgelist[,c(3,5)])
+                }else{
+                  edges_1 <- as.data.frame(edgelist[,c(3,5)])
+                  edges_1$Obs_ID <- seq(1, nrow(edges_1), 1)
+                  
+                  edges_2 <- as.data.frame(edgelist[,c(5,3)])
+                  edges_2$Obs_ID <- seq(1, nrow(edges_1), 1)
+                  names(edges_2) <- c('i_id', 'j_id', 'Obs_ID')
+                  
+                  edges <- rbind(edges_1, edges_2)
+                  edges <- edges[order(edges$Obs_ID), ]
+                  edges <- edges[!(edges$i_id == edges$j_id), ]
+                  edges <- edges[, c(1:2)]
+                  rm(edges_1, edges_2)
+                }
+                  
               # Calculating the total degree for each node
                 node_degree <- sna::degree(g, gmode=gmode, cmode='freeman', ignore.eval=TRUE)
                 node_degree <- as.data.frame(cbind(seq(1, length(node_degree), 1), node_degree))
@@ -2025,7 +2094,7 @@ base_data <- import_data('ahs_wpvar')
                         for(i in nrow(pairs)) {
                           column_set <- pairs[i,]
                           tie_set <- ties[,column_set]
-                          multiplex_edge_correlation <- paste0('Edge Correlation for ', paste(column_set, collapse= ' and '), ': ',stats::cor(tie_set)[1,2])
+                          multiplex_edge_correlation <- paste0('Edge Correlation for ', paste(column_set, collapse= ' and '), ': ', round(stats::cor(tie_set)[1,2], digits=2))
                           rm(column_set, tie_set)
                       }
                         rm(pairs, types, subnets, ties)
@@ -2101,7 +2170,7 @@ base_data <- import_data('ahs_wpvar')
                       for(i in nrow(pairs)) {
                         column_set <- pairs[i,]
                         tie_set <- ties[,column_set]
-                        multiplex_edge_correlation <- paste0('Edge Correlation for ', paste(column_set, collapse= ' and '), ': ',stats::cor(tie_set)[1,2])
+                        multiplex_edge_correlation <- paste0('Edge Correlation for ', paste(column_set, collapse= ' and '), ': ', round(stats::cor(tie_set)[1,2], digits=2))
                         rm(column_set, tie_set)
                       }
                       rm(pairs, types, subnets, ties)
@@ -2120,8 +2189,8 @@ base_data <- import_data('ahs_wpvar')
           # Calculating System-Level Measures
             largest_weak_component(g)
             largest_bicomponent(g)
-            assortativity_degree(g)
-            reciprocity_rate <- sna::grecip(g, measure='dyadic.nonnull')
+            assortativity_degree(edgelist, g)
+            reciprocity_rate <- ifelse(as.logical(directed)==TRUE,sna::grecip(g, measure='dyadic.nonnull'), sna::grecip(g, measure='correlation'))
             trans_rate(g)
             global_clustering_coefficient <- sna::gtrans(g,mode=gmode, measure='weak')
             average_geodesic(g)
@@ -2134,243 +2203,253 @@ base_data <- import_data('ahs_wpvar')
         assign(x = 'edgelist', value = edgelist,.GlobalEnv)  
         assign(x = 'nodelist', value = nodes,.GlobalEnv)  
         assign(x = net_name, value = g,.GlobalEnv)
+    }
+    
+  # Generating Report
+    # System-Level Data Object
+      if(package =='igraph') {
+        # Creating Component Aggregate Measures
+          num_clusters <- igraph::clusters(g, mode="weak")[[3]]
+          proportion_largest <- max(igraph::clusters(g, mode="weak")[[2]])/nrow(nodes)
+      
+        # Creating system-level data object
+          multiplex_edge_correlation <- ifelse(type==FALSE, 'Singleplex Network', multiplex_edge_correlation)
+          multiplex_edge_correlation <- multiplex_edge_correlation[[1]]
+      
+          measure_labels <- c('Number of Components', 'Proportion in the Largest Component',
+                              'Degree Assortativity', 'Reciprocity Rate', 'Transitivity Rate', 
+                              'Global Clustering Coefficient', 'Average Geodesic',
+                              'Multi-Level Edge Correlation')
+          measure_descriptions <- c( 'The number of weak components in the graph', 
+                                     'The proportion of nodes in the largest weak component of the graph',
+                                     'Edgewise correlation of degree', 'The proportion of directed ties that are reciprocated',
+                                     'The proportion of two-step paths that are also one-step paths',
+                                     'The proportion of closed triangles to all triangles', 'The average shortest path length',
+                                     'Multiplex networks edgwise correlation of relations')
+        measures <- c(num_clusters, proportion_largest, degree_assortatvity, reciprocity_rate,
+                      transitivity_rate, global_clustering_coefficient, average_path_length,
+                      multiplex_edge_correlation)
+        system_level_measures <- cbind(as.data.frame(measure_labels), measure_descriptions, measures)
+      
+      # Removing node-level and system-level data objects for clarity
+        rm(measure_labels, measure_descriptions, num_clusters, proportion_largest, degree_assortatvity,
+           reciprocity_rate, global_clustering_coefficient, average_path_length,
+           multiplex_edge_correlation, measures)
+      
+        rm(betweenness, bonpow, closeness, constraint, eigen_cen, in_degree, out_degree,
+           total_degree, weighted_degree)
+      
+        rm(transitivity_rate, reachability, envir = .GlobalEnv)
+    }else{
+      # Creating Component Aggregate Measures
+        num_clusters <- sna::components(g, connected='weak')
+        components <- sna::component.largest(g, connected = 'weak', result='membership')
+        proportion_largest <- length(components[components==TRUE])/nrow(nodes)
+        rm(components)
+      
+      # Creating system-level data object
+        multiplex_edge_correlation <- ifelse(type==FALSE, 'Singleplex Network', multiplex_edge_correlation)
+        multiplex_edge_correlation <- multiplex_edge_correlation[[1]]
+      
+        measure_labels <- c('Number of Components', 'Proportion in the Largest Component',
+                            'Degree Assortativity', 'Reciprocity Rate', 'Transitivity Rate', 
+                            'Global Clustering Coefficient', 'Average Geodesic', 'Multi-Level Edge Correlation')
+        measure_descriptions <- c( 'The number of weak components in the graph', 
+                                   'The proportion of nodes in the largest weak component of the graph',
+                                   'Edgewise correlation of degree', 'The proportion of directed ties that are reciprocated',
+                                   'The proportion of two-step paths that are also one-step paths',
+                                   'The proportion of closed triangles to all triangles', 'The average shortest path length',
+                                   'Multiplex networks edgwise correlation of relations')
+        measures <- c(num_clusters, proportion_largest, degree_assortatvity, reciprocity_rate,
+                      transitivity_rate, global_clustering_coefficient, average_path_length,
+                      multiplex_edge_correlation)
+        system_level_measures <- cbind(as.data.frame(measure_labels), measure_descriptions, measures)
+      
+      # Removing node-level and system-level data objects for clarity
+        rm(measure_labels, measure_descriptions, num_clusters, proportion_largest,
+           reciprocity_rate, global_clustering_coefficient, multiplex_edge_correlation, measures)
+      
+        rm(betweenness, bonpow, closeness, constraint, eigen_cen, in_degree, out_degree,
+           reachability, total_degree, weighted_degree)
+      
+        rm(degree_assortatvity, transitivity_rate, average_path_length, envir = .GlobalEnv)
+    }
+    
+    # System & Node-Level Visualizations
+      x11(width=10.6806, height=7.30556)
+      system_plot <- function() {
+        # Creating Layout
+          viz_matrix <- matrix(c(10,10,10,10,10,10,10,10,10,
+                                 2,2,2,3,3,3,0,0,0,
+                                 1,1,1,1,1,1,4,4,4,
+                                 1,1,1,1,1,1,0,0,0,
+                                 1,1,1,1,1,1,5,5,5,
+                                 1,1,1,1,1,1,6,6,6,
+                                 1,1,1,1,1,1,0,0,0,
+                                 1,1,1,1,1,1,9,9,9,
+                                 7,7,7,8,8,8,0,0,0), 
+                        ncol  = 9, byrow = TRUE)
+          layout(viz_matrix)
+      
+        # Defining degree distribution coordinates
+          y_axis <- density(nodes$total_degree)$y
+          x_axis <- density(nodes$total_degree)$x
+          coordinates <- cbind(as.data.frame(x_axis), y_axis)
+          coordinates <- coordinates[(coordinates$x_axis >= 0), ]
+          x_axis <- pretty(coordinates$x_axis)
+          y_axis <- pretty(coordinates$y_axis)
+          x_spacer <- x_axis[c(length(x_axis))] - x_axis[c(length(x_axis)-1)]
+          x_spacer <- x_spacer*0.5
+          y_spacer <- y_axis[c(length(y_axis))] - y_axis[c(length(y_axis)-1)]
+          y_spacer <- y_spacer*0.5
+      
+        # Defining Base Degree Plot
+          par(mar = c(5,6,2,2),  family='HersheySerif')
+          plot(0, type='n', xlab=' ', ylab=' ', xlim=c(min(x_axis), max(x_axis)), 
+               ylim=c(min(y_axis), max(y_axis)), cex.axis=1.3, family='HersheySerif', 
+               las=1, main=' ', bty='n')
+              grid(lwd = 2)
+      
+        # Adding Margin Text
+          mtext(side = 1, text = 'Total Degree', col = "black", line = 3, cex = 1.5, family='HersheySerif')
+        mtext(side = 2, text = 'Density', col = "black", line = 4.5, cex = 1.5, family='HersheySerif')
+      
+        # Plotting Degree
+          lines(coordinates$x_axis, coordinates$y_axis, col='brown', lwd=1.5)
+      
+        # Adding Skew and Kurtosis
+          skewness <- moments::skewness(nodes$total_degree)
+          kurtosis <- moments::kurtosis(nodes$total_degree)
+          text(x = (max(x_axis)-x_spacer), y = (max(y_axis)-y_spacer), paste('Skewness',round(skewness, digits=2)), cex=1.3)
+          text(x = (max(x_axis)-x_spacer), y = (max(y_axis)-(y_spacer*2)), paste('Kurtosis',round(kurtosis, digits=2)), cex=1.3)
+      
+        # Adding Title
+          title(c("Total Degree Distribution"), family='serif', cex.main=2)
+      
+        # Populating Subplots
+          for(i in seq_along(system_level_measures$measure_labels)) {
+            plot_measure <- system_level_measures[i,3]
         
-      # Generating Report
-        # System-Level Data Object
-          if(package =='igraph') {
-            # Creating Component Aggregate Measures
-              num_clusters <- igraph::clusters(g, mode="weak")[[3]]
-              proportion_largest <- max(igraph::clusters(g, mode="weak")[[2]])/nrow(nodes)
-            
-            # Creating system-level data object
-              multiplex_edge_correlation <- ifelse(type==FALSE, 'Singleplex Network', multiplex_edge_correlation)
-            
-              measure_labels <- c('Number of Components', 'Proportion in the Largest Component',
-                                  'Degree Assortativity', 'Reciprocity Rate', 'Transitivity Rate', 
-                                  'Global Clustering Coefficient', 'Average Geodesic',
-                                  'Multi-Level Edge Correlation')
-              measure_descriptions <- c( 'The number of weak components in the graph', 
-                                        'The proportion of nodes in the largest weak component of the graph',
-                                        'Edgewise correlation of degree', 'The proportion of directed ties that are reciprocated',
-                                        'The proportion of two-step paths that are also one-step paths',
-                                        'The proportion of closed triangles to all triangles', 'The average shortest path length',
-                                        'Multiplex networks edgwise correlation of relations')
-              measures <- c(num_clusters, proportion_largest, degree_assortatvity, reciprocity_rate,
-                            transitivity_rate, global_clustering_coefficient, average_path_length,
-                            multiplex_edge_correlation)
-              system_level_measures <- cbind(as.data.frame(measure_labels), measure_descriptions, measures)
-            
-            # Removing node-level and system-level data objects for clarity
-              rm(measure_labels, measure_descriptions, num_clusters, proportion_largest, degree_assortatvity,
-                 reciprocity_rate, transitivity_rate, global_clustering_coefficient, average_path_length,
-                 multiplex_edge_correlation, measures)
-            
-              rm(betweenness, bonpow, closeness, constraint, eigen_cen, in_degree, out_degree,
-                 reachability, total_degree, weighted_degree)
+            plot_measure <- ifelse(i < 8, as.numeric(plot_measure), plot_measure)
+            plot_measure <- ifelse(i < 8, round(plot_measure, digits=2), plot_measure)
+            plot_measure <- ifelse(i == 8, trimws(gsub('Edge', '', plot_measure)), plot_measure)
+        
+            par(mar=c(0,0,0,0), family='serif')
+            plot(0, type='n', xlab=' ', ylab=' ', xlim=c(1,10), 
+                 ylim=c(1,10), axes=FALSE, main='', bty='n')
+        
+            text(x=5, y=9, system_level_measures[i,1], family='serif', font=2, cex=1.3)
+            text(x=5, y=6.5, plot_measure, family='serif', cex=1.5)
+            rm(plot_measure)
+        }
+      
+        # Adding Plot Title
+          par(mar=c(0,0,0,0), family='serif')
+          plot(0, type='n', xlab=' ', ylab=' ', xlim=c(1,10), 
+               ylim=c(1,10), axes=FALSE, main='', bty='n')
+          text(x=5.5, y=5, 'System-Level Measures', family='serif', font=2, cex=3)
+      } 
+    
+      g <- cowplot::as_grob(system_plot)
+      p_1 <- cowplot::ggdraw(g)
+    
+      p_1 
+    
+      node_measures_plot <- function() {
+        # Specifying nicer labels
+          if(directed == TRUE){
+            plot_labels <- c('Weighted Degree', 'In-Degree', 'Out-Degree', 'Closeness', 
+                             'Betweenness', 'Bonacich Power Centrality', 'Eigenvector Centrality', 
+                             'Constraint', 'Reachability')
           }else{
-            # Creating Component Aggregate Measures
-              num_clusters <- sna::components(g, connected='weak')
-              components <- sna::component.largest(g, connected = 'weak', result='membership')
-              proportion_largest <- length(components[components==TRUE])/nrow(nodes)
-              rm(components)
-              
-            # Creating system-level data object
-              multiplex_edge_correlation <- ifelse(type==FALSE, 'Singleplex Network', multiplex_edge_correlation)
-              
-              measure_labels <- c('Number of Components', 'Proportion in the Largest Component',
-                                  'Degree Assortativity', 'Reciprocity Rate', 'Transitivity Rate', 
-                                  'Global Clustering Coefficient', 'Average Geodesic', 'Multi-Level Edge Correlation')
-              measure_descriptions <- c( 'The number of weak components in the graph', 
-                                         'The proportion of nodes in the largest weak component of the graph',
-                                         'Edgewise correlation of degree', 'The proportion of directed ties that are reciprocated',
-                                         'The proportion of two-step paths that are also one-step paths',
-                                         'The proportion of closed triangles to all triangles', 'The average shortest path length',
-                                         'Multiplex networks edgwise correlation of relations')
-              measures <- c(num_clusters, proportion_largest, degree_assortatvity, reciprocity_rate,
-                            transitivity_rate, global_clustering_coefficient, average_path_length,
-                            multiplex_edge_correlation)
-              system_level_measures <- cbind(as.data.frame(measure_labels), measure_descriptions, measures)
-              
-            # Removing node-level and system-level data objects for clarity
-              rm(measure_labels, measure_descriptions, num_clusters, proportion_largest, degree_assortatvity,
-                 reciprocity_rate, transitivity_rate, global_clustering_coefficient, average_path_length,
-                 multiplex_edge_correlation, measures)
-              
-              rm(betweenness, bonpow, closeness, constraint, eigen_cen, in_degree, out_degree,
-                 reachability, total_degree, weighted_degree)
+            plot_labels <- c('Weighted Degree', 'Closeness', 'Betweenness', 'Bonacich Power Centrality',
+                             'Eigenvector Centrality', 'Constraint', 'Reachability')
           }
-        
-        # System & Node-Level Visualizations
-          x11(width=10.6806, height=7.30556)
-          system_plot <- function() {
-            # Creating Layout
-              viz_matrix <- matrix(c(10,10,10,10,10,10,10,10,10,
-                                     2,2,2,3,3,3,0,0,0,
-                                     1,1,1,1,1,1,4,4,4,
-                                     1,1,1,1,1,1,0,0,0,
-                                     1,1,1,1,1,1,5,5,5,
-                                     1,1,1,1,1,1,6,6,6,
-                                     1,1,1,1,1,1,0,0,0,
-                                     1,1,1,1,1,1,9,9,9,
-                                     7,7,7,8,8,8,0,0,0), 
-                                     ncol  = 9, byrow = TRUE)
-              layout(viz_matrix)
-          
+      
+        # Isolating the measure being visualized based on whether it's directed or not
+          if(directed == TRUE){
+            plot_measures <- c("weighted_degree", "in_degree", "out_degree",     
+                               "closeness", "betweenness", "bonpow", "eigen_cen",
+                               "constraint", "reachability")
+          }else{
+            plot_measures <- c("weighted_degree", "closeness", "betweenness", 
+                               "bonpow", "eigen_cen", "constraint", "reachability")
+          }
+      
+        # Defining the layout used 
+          if(directed == TRUE){
+            viz_matrix <- matrix(c(10,10,10,10,10,10,10,10,10,
+                                   1,1,1,2,2,2,3,3,3,
+                                   1,1,1,2,2,2,3,3,3,
+                                   1,1,1,2,2,2,3,3,3,
+                                   4,4,4,5,5,5,6,6,6,
+                                   4,4,4,5,5,5,6,6,6,
+                                   4,4,4,5,5,5,6,6,6,
+                                   7,7,7,8,8,8,9,9,9,
+                                   7,7,7,8,8,8,9,9,9,
+                                   7,7,7,8,8,8,9,9,9), 
+                                ncol  = 9, byrow = TRUE)
+            layout(viz_matrix)
+          }else{
+            viz_matrix <- matrix(c(8,8,8,8,8,8,8,8,8,
+                                   1,1,1,2,2,2,3,3,3,
+                                   1,1,1,2,2,2,3,3,3,
+                                   1,1,1,2,2,2,3,3,3,
+                                   4,4,4,5,5,5,6,6,6,
+                                   4,4,4,5,5,5,6,6,6,
+                                   4,4,4,5,5,5,6,6,6,
+                                   7,7,7,0,0,0,0,0,0,
+                                   7,7,7,0,0,0,0,0,0,
+                                   7,7,7,0,0,0,0,0,0), 
+                                  ncol  = 9, byrow = TRUE)
+            layout(viz_matrix)
+        }
+      
+        # Generating Subplot
+          for(i in seq_along(plot_measures)){
             # Defining degree distribution coordinates
-              y_axis <- density(nodes$total_degree)$y
-              x_axis <- density(nodes$total_degree)$x
+              y_axis <- density(nodes[,plot_measures[[i]]])$y
+              x_axis <- density(nodes[,plot_measures[[i]]])$x
               coordinates <- cbind(as.data.frame(x_axis), y_axis)
-              coordinates <- coordinates[(coordinates$x_axis >= 0), ]
+              coordinates <- coordinates[(coordinates$x_axis >= min(nodes[,plot_measures[[i]]])), ]
               x_axis <- pretty(coordinates$x_axis)
               y_axis <- pretty(coordinates$y_axis)
-              x_spacer <- x_axis[c(length(x_axis))] - x_axis[c(length(x_axis)-1)]
-              x_spacer <- x_spacer*0.5
-              y_spacer <- y_axis[c(length(y_axis))] - y_axis[c(length(y_axis)-1)]
-              y_spacer <- y_spacer*0.5
-              
-            # Defining Base Degree Plot
-              par(mar = c(5,6,2,2),  family='HersheySerif')
-              plot(0, type='n', xlab=' ', ylab=' ', xlim=c(min(x_axis), max(x_axis)), 
-                   ylim=c(min(y_axis), max(y_axis)), cex.axis=1.3, family='HersheySerif', 
-                   las=1, main=' ', bty='n')
-              grid(lwd = 2)
-              
-            # Adding Margin Text
-              mtext(side = 1, text = 'Total Degree', col = "black", line = 3, cex = 1.5, family='HersheySerif')
-              mtext(side = 2, text = 'Density', col = "black", line = 4.5, cex = 1.5, family='HersheySerif')
-              
-            # Plotting Degree
-              lines(coordinates$x_axis, coordinates$y_axis, col='brown', lwd=1.5)
-              
-            # Adding Skew and Kurtosis
-              skewness <- moments::skewness(nodes$total_degree)
-              kurtosis <- moments::kurtosis(nodes$total_degree)
-              text(x = (max(x_axis)-x_spacer), y = (max(y_axis)-y_spacer), paste('Skewness',round(skewness, digits=2)), cex=1.3)
-              text(x = (max(x_axis)-x_spacer), y = (max(y_axis)-(y_spacer*2)), paste('Kurtosis',round(kurtosis, digits=2)), cex=1.3)
-              
-            # Adding Title
-              title(c("Total Degree Distribution"), family='serif', cex.main=2)
-              
-            # Populating Subplots
-              for(i in seq_along(system_level_measures$measure_labels)) {
-                plot_measure <- system_level_measures[i,3]
-                if(type == FALSE) {
-                  plot_measure <- ifelse(i < 8, as.numeric(plot_measure), plot_measure)
-                }else{
-                  plot_meaure <- as.numeric(plot_measure)
-                }
-                
-                plot_measure <- ifelse(i < 8, round(plot_measure, digits=2), plot_measure)
-                  
-                par(mar=c(0,0,0,0), family='serif')
-                plot(0, type='n', xlab=' ', ylab=' ', xlim=c(1,10), 
-                     ylim=c(1,10), axes=FALSE, main='', bty='n')
-                
-                text(x=5, y=9, system_level_measures[i,1], family='serif', font=2, cex=1.3)
-                text(x=5, y=6.5, plot_measure, family='serif', cex=1.5)
-                rm(plot_measure)
-              }
-              
-            # Adding Plot Title
-              par(mar=c(0,0,0,0), family='serif')
-              plot(0, type='n', xlab=' ', ylab=' ', xlim=c(1,10), 
-                   ylim=c(1,10), axes=FALSE, main='', bty='n')
-              text(x=5.5, y=5, 'System-Level Measures', family='serif', font=2, cex=3)
-          } 
-          
-          g <- cowplot::as_grob(system_plot)
-          p_1 <- cowplot::ggdraw(g)
-          
-          p_1 
-          
-          node_measures_plot <- function() {
-            # Specifying nicer labels
-              if(directed == TRUE){
-                plot_labels <- c('Weighted Degree', 'In-Degree', 'Out-Degree', 'Closeness', 
-                                 'Betweenness', 'Bonacich Power Centrality', 'Eigenvector Centrality', 
-                                 'Constraint', 'Reachability')
-              }else{
-                plot_labels <- c('Weighted Degree', 'Closeness', 'Betweenness', 'Bonacich Power Centrality',
-                                 'Eigenvector Centrality', 'Constraint', 'Reachability')
-              }
-            
-            # Isolating the measure being visualized based on whether it's directed or not
-              if(directed == TRUE){
-                plot_measures <- names(nodes)[4:length(names(nodes))]
-              }else{
-                plot_measures <- names(nodes)[c(4, 7,8,9,10,11,12)]
-              }
-          
-            # Defining the layout used 
-              if(directed == TRUE){
-                viz_matrix <- matrix(c(10,10,10,10,10,10,10,10,10,
-                                       1,1,1,2,2,2,3,3,3,
-                                       1,1,1,2,2,2,3,3,3,
-                                       1,1,1,2,2,2,3,3,3,
-                                       4,4,4,5,5,5,6,6,6,
-                                       4,4,4,5,5,5,6,6,6,
-                                       4,4,4,5,5,5,6,6,6,
-                                       7,7,7,8,8,8,9,9,9,
-                                       7,7,7,8,8,8,9,9,9,
-                                       7,7,7,8,8,8,9,9,9), 
-                                       ncol  = 9, byrow = TRUE)
-                layout(viz_matrix)
-              }else{
-                viz_matrix <- matrix(c(8,8,8,8,8,8,8,8,8,
-                                       1,1,1,2,2,2,3,3,3,
-                                       1,1,1,2,2,2,3,3,3,
-                                       1,1,1,2,2,2,3,3,3,
-                                       4,4,4,5,5,5,6,6,6,
-                                       4,4,4,5,5,5,6,6,6,
-                                       4,4,4,5,5,5,6,6,6,
-                                       7,7,7,0,0,0,0,0,0,
-                                       7,7,7,0,0,0,0,0,0,
-                                       7,7,7,0,0,0,0,0,0), 
-                                       ncol  = 9, byrow = TRUE)
-                layout(viz_matrix)
-              }
-            
-            # Generating Subplot
-              for(i in seq_along(plot_measures)){
-                # Defining degree distribution coordinates
-                  y_axis <- density(nodes[,plot_measures[[i]]])$y
-                  x_axis <- density(nodes[,plot_measures[[i]]])$x
-                  coordinates <- cbind(as.data.frame(x_axis), y_axis)
-                  coordinates <- coordinates[(coordinates$x_axis >= min(nodes[,plot_measures[[i]]])), ]
-                  x_axis <- pretty(coordinates$x_axis)
-                  y_axis <- pretty(coordinates$y_axis)
-            
-                # Defining Base Degree Plot
-                  par(mar = c(5,6,2,2),  family='HersheySerif')
-                  plot(0, type='n', xlab=' ', ylab=' ', xlim=c(min(x_axis), max(x_axis)), 
-                      ylim=c(min(y_axis), max(y_axis)), cex.axis=1.3, family='HersheySerif', 
-                      las=1, main=' ', bty='n')
-                  grid(lwd = 2)
-            
-                # Adding Margin Text
-                  mtext(side = 1, text = plot_labels[[i]], col = "black", line = 3, cex = 1.3, family='HersheySerif')
-
-                # Plotting Degree
-                  lines(coordinates$x_axis, coordinates$y_axis, col='brown', lwd=1.5)
-              } 
-          
-            # Adding Title
-              par(mar=c(0,0,0,0), family='serif')
-              plot(0, type='n', xlab=' ', ylab=' ', xlim=c(1,10), 
-                   ylim=c(1,10), axes=FALSE, main='', bty='n')
-              text(x=5.5, y=5, 'Node-Level Measures', family='serif', font=2, cex=3)
-          }
         
-          g <- cowplot::as_grob(node_measures_plot)
-          p_2 <- cowplot::ggdraw(g)
+          # Defining Base Degree Plot
+            par(mar = c(5,6,2,2),  family='HersheySerif')
+            plot(0, type='n', xlab=' ', ylab=' ', xlim=c(min(x_axis), max(x_axis)), 
+                 ylim=c(min(y_axis), max(y_axis)), cex.axis=1.3, family='HersheySerif', 
+                 las=1, main=' ', bty='n')
+            grid(lwd = 2)
         
-          p_2
+          # Adding Margin Text
+            mtext(side = 1, text = plot_labels[[i]], col = "black", line = 3, cex = 1.3, family='HersheySerif')
+        
+          # Plotting Degree
+            lines(coordinates$x_axis, coordinates$y_axis, col='brown', lwd=1.5)
+        } 
       
-      # Assigning Report Elements to the Global Environment
-        assign(x = 'system_measure_plot', value = p_1,.GlobalEnv)  
-        assign(x = 'node_measure_plot', value = p_2,.GlobalEnv)
-    }
+        # Adding Title
+          par(mar=c(0,0,0,0), family='serif')
+          plot(0, type='n', xlab=' ', ylab=' ', xlim=c(1,10), 
+               ylim=c(1,10), axes=FALSE, main='', bty='n')
+          text(x=5.5, y=5, 'Node-Level Measures', family='serif', font=2, cex=3)
+      }
+    
+      g <- cowplot::as_grob(node_measures_plot)
+      p_2 <- cowplot::ggdraw(g)
+    
+      p_2
+    
+    # Assigning Report Elements to the Global Environment
+      assign(x = 'system_measure_plot', value = p_1,.GlobalEnv)  
+      assign(x = 'node_measure_plot', value = p_2,.GlobalEnv)
+      assign(x = 'system_level_measures', value = system_level_measures, .GlobalEnv)
+      dev.off()
   }
+  
+# Evoking a Custom Plot Window
+  x11(width=10.6806, height=7.30556)
     
 # Edgelist Example
   netwrite(data_type = c('edgelist'), adjacency_matrix=FALSE, adjacency_list=FALSE,
@@ -2387,6 +2466,13 @@ base_data <- import_data('ahs_wpvar')
   par(mar=c(0,0,0,0))
   plot(largest_bi_component)
   
+  system_measure_plot
+
+  node_measure_plot
+  
+  rm(largest_component, largest_component_ids, largest_bi_component, largest_bicomponent_ids,
+     system_level_measures, system_measure_plot, node_measure_plot)
+  
 # Creating a type vector for the purposes of test netwrite's multiplex edge correlation function
   types <- c(1, 2)
   type <- sample(types, dim(edgelist)[[1]], replace=TRUE)
@@ -2395,7 +2481,7 @@ base_data <- import_data('ahs_wpvar')
   netwrite(data_type = c('edgelist'), adjacency_matrix=FALSE, adjacency_list=FALSE,
            nodelist=FALSE, i_elements=community_2$ego_nid, j_elements=community_2$alter_id, weights=FALSE,
            type=type, package='network', missing_code=99999, weight_type='frequency', 
-           directed='TRUE', net_name='net_2')
+           directed='FALSE', net_name='net_2')
   
   par(mar=c(0,0,0,0))
   plot(net_2)
@@ -2406,8 +2492,26 @@ base_data <- import_data('ahs_wpvar')
   par(mar=c(0,0,0,0))
   plot(largest_bi_component)
   
+  system_measure_plot
+  
+  node_measure_plot
+  
+  rm(largest_component, largest_component_ids, largest_bi_component, largest_bicomponent_ids,
+     system_level_measures, system_measure_plot, node_measure_plot)
+  
 # Adjacency Matrix Example
-  adj_mat <- as.matrix(net_2, matrix.type="adjacency")
+  edges <- as.data.frame(as.matrix(net_2, matrix.type="edgelist"))
+  edges <- cbind(seq(1, nrow(edges), 1), edges)
+  colnames(edges) <- c('Obs_ID', 'i_id', 'j_id')
+  
+  adj_mat <- matrix(nrow=105, ncol=105)
+  for(i in seq_along(edges$Obs_ID)){
+    edge <- edges[i, ]
+    adj_mat[edge$j_id, edge$i_id] <- 1
+    rm(edge)
+  }
+  adj_mat[is.na(adj_mat)] <- 0
+  colnames(adj_mat) <- seq(1, 105, 1)
   
   netwrite(data_type = c('adjacency_matrix'), adjacency_matrix=adj_mat, adjacency_list=FALSE,
            nodelist=FALSE, i_elements=FALSE, j_elements=FALSE, weights=FALSE, type=FALSE,
@@ -2417,13 +2521,27 @@ base_data <- import_data('ahs_wpvar')
   par(mar=c(0,0,0,0))
   plot(net_3)
   
+  system_measure_plot
+  
+  node_measure_plot
+  
+  rm(largest_component, largest_component_ids, largest_bi_component, largest_bicomponent_ids,
+     system_level_measures, system_measure_plot, node_measure_plot)
+  
   netwrite(data_type = c('adjacency_matrix'), adjacency_matrix=adj_mat, adjacency_list=FALSE,
            nodelist=FALSE, i_elements=FALSE, j_elements=FALSE, weights=FALSE, type=FALSE,
            package='network', missing_code=99999, weight_type='frequency', 
-           directed='TRUE', net_name='net_4')
+           directed='FALSE', net_name='net_4')
   
   par(mar=c(0,0,0,0))
   plot(net_4)
+  
+  system_measure_plot
+  
+  node_measure_plot
+  
+  rm(largest_component, largest_component_ids, largest_bi_component, largest_bicomponent_ids,
+     system_level_measures, system_measure_plot, node_measure_plot)
   
 # Adjacency List Example
   adjacency_list <- igraph::as_adj_list(net_1, mode='out')
@@ -2443,10 +2561,17 @@ base_data <- import_data('ahs_wpvar')
   netwrite(data_type = c('adjacency_list'), adjacency_matrix=FALSE, adjacency_list=adj_list,
            nodelist=FALSE, i_elements=FALSE, j_elements=FALSE, weights=FALSE, type=FALSE,
            package='network', missing_code=99999, weight_type='frequency', 
-           directed='TRUE', net_name='net_5')
+           directed='FALSE', net_name='net_5')
   
   par(mar=c(0,0,0,0))
   plot(net_5)
+  
+  system_measure_plot
+  
+  node_measure_plot
+  
+  rm(largest_component, largest_component_ids, largest_bi_component, largest_bicomponent_ids,
+     system_level_measures, system_measure_plot, node_measure_plot)
   
   netwrite(data_type = c('adjacency_list'), adjacency_matrix=FALSE, adjacency_list=adj_list,
            nodelist=FALSE, i_elements=FALSE, j_elements=FALSE, weights=FALSE, type=FALSE,
@@ -2455,6 +2580,13 @@ base_data <- import_data('ahs_wpvar')
   
   par(mar=c(0,0,0,0))
   plot(net_6)
+  
+  system_measure_plot
+  
+  node_measure_plot
+  
+  rm(largest_component, largest_component_ids, largest_bi_component, largest_bicomponent_ids,
+     system_level_measures, system_measure_plot, node_measure_plot)
   
 ###############
 #   netread   #
@@ -2675,7 +2807,7 @@ netread(package='network', network_object=network)
               for(i in nrow(pairs)) {
                 column_set <- pairs[i,]
                 tie_set <- ties[,column_set]
-                multiplex_edge_correlation <- paste0('Edge Correlation for ', paste(column_set, collapse= ' and '), ': ',stats::cor(tie_set)[1,2])
+                multiplex_edge_correlation <- paste0('Edge Correlation for ', paste(column_set, collapse= ' and '), ': ', round(stats::cor(tie_set)[1,2], digits=2))
                 rm(column_set, tie_set)
               }
               rm(pairs, types, subnets, ties)
@@ -2745,7 +2877,7 @@ netread(package='network', network_object=network)
               for(i in nrow(pairs)) {
               column_set <- pairs[i,]
               tie_set <- ties[,column_set]
-              multiplex_edge_correlation <- paste0('Edge Correlation for ', paste(column_set, collapse= ' and '), ': ',stats::cor(tie_set)[1,2])
+              multiplex_edge_correlation <- paste0('Edge Correlation for ', paste(column_set, collapse= ' and '), ': ', round(stats::cor(tie_set)[1,2], digits=2))
               rm(column_set, tie_set)
             }
               rm(pairs, types, subnets, ties)
@@ -2836,6 +2968,19 @@ netread(package='network', network_object=network)
   }
   
   n_constraint <- constraint.orig(g)
+  
+# iGraph Degree Assortativity
+  assortativity <- function(g){
+    deg <- igraph::degree(net_1)
+    deg.sq <- deg^2
+    m <- igraph::ecount(net_1)
+    num1 <- 0; num2 <- 0; den <- 0
+    edges <- igraph::get.edgelist(net_1, names=FALSE)+1
+    num1 <- sum(deg[edges[,1]] * deg[edges[,2]]) / m
+    num2 <- (sum(deg[edges[,1]] + deg[edges[,2]]) / (2 * m))^2
+    den <- sum(deg.sq[edges[,1]] + deg.sq[edges[,2]]) / (2 * m)
+    return((num1-num2)/(den-num2))
+  }
 
 
 
