@@ -195,7 +195,11 @@
                         paths[[j]] <- as.integer(igraph::neighbors(g, (one_step_paths[[i]][[j]]), mode=c('total')))
                       }
                     }
-                    two_step_paths[[i]] <- sort(unique(unlist(paths)))
+                    if(length(paths) > 0){
+                      two_step_paths[[i]] <- sort(unique(unlist(paths)))
+                    }else{
+                      two_step_paths[[i]] <- 0
+                    }
                     rm(paths)
                   }
                 
@@ -363,7 +367,11 @@
                         paths[[j]] <- as.integer(igraph::neighbors(g, (one_step_paths[[i]][[j]]), mode=c('total')))
                       }
                     }
-                    two_step_paths[[i]] <- sort(unique(unlist(paths)))
+                    if(length(paths) > 0){
+                      two_step_paths[[i]] <- sort(unique(unlist(paths)))
+                    }else{
+                      two_step_paths[[i]] <- 0
+                    }
                     rm(paths)
                   }
                 
@@ -602,8 +610,11 @@
                     for(j in seq_along(one_step_paths[[i]])) {
                       paths[[j]] <- network::get.neighborhood(g, one_step_paths[[i]][[j]], type=c('combined'))
                     }
-                    paths <- sort(unique(unlist(paths)))
-                    two_step_paths[[i]] <- paths
+                    if(length(paths) > 0){
+                      two_step_paths[[i]] <- sort(unique(unlist(paths)))
+                    }else{
+                      two_step_paths[[i]] <- 0
+                    }
                     rm(paths)
                   }
                 
@@ -887,8 +898,11 @@
                     for(j in seq_along(one_step_paths[[i]])) {
                       paths[[j]] <- network::get.neighborhood(g, one_step_paths[[i]][[j]], type=c('combined'))
                     }
-                    paths <- sort(unique(unlist(paths)))
-                    two_step_paths[[i]] <- paths
+                    if(length(paths) > 0){
+                      two_step_paths[[i]] <- sort(unique(unlist(paths)))
+                    }else{
+                      two_step_paths[[i]] <- 0
+                    }
                     rm(paths)
                   }
                 
@@ -1110,7 +1124,11 @@
                       paths[[j]] <- as.integer(igraph::neighbors(g, (one_step_paths[[i]][[j]]), mode=c('total')))
                     }
                   }
-                  two_step_paths[[i]] <- sort(unique(unlist(paths)))
+                  if(length(paths) > 0){
+                    two_step_paths[[i]] <- sort(unique(unlist(paths)))
+                  }else{
+                    two_step_paths[[i]] <- 0
+                  }
                   rm(paths)
                 }
                 
@@ -1372,8 +1390,11 @@
                   for(j in seq_along(one_step_paths[[i]])) {
                     paths[[j]] <- network::get.neighborhood(g, one_step_paths[[i]][[j]], type=c('combined'))
                   }
-                  paths <- sort(unique(unlist(paths)))
-                  two_step_paths[[i]] <- paths
+                  if(length(paths) > 0){
+                    two_step_paths[[i]] <- sort(unique(unlist(paths)))
+                  }else{
+                    two_step_paths[[i]] <- 0
+                  }
                   rm(paths)
                 }
               
@@ -1670,7 +1691,11 @@
                       paths[[j]] <- as.integer(igraph::neighbors(g, (one_step_paths[[i]][[j]]), mode=c('total')))
                     }
                   }
-                  two_step_paths[[i]] <- sort(unique(unlist(paths)))
+                  if(length(paths) > 0){
+                    two_step_paths[[i]] <- sort(unique(unlist(paths)))
+                  }else{
+                    two_step_paths[[i]] <- 0
+                  }
                   rm(paths)
                 }
               
@@ -2057,8 +2082,11 @@
                   for(j in seq_along(one_step_paths[[i]])) {
                     paths[[j]] <- network::get.neighborhood(g, one_step_paths[[i]][[j]], type=c('combined'))
                   }
-                  paths <- sort(unique(unlist(paths)))
-                  two_step_paths[[i]] <- paths
+                  if(length(paths) > 0){
+                    two_step_paths[[i]] <- sort(unique(unlist(paths)))
+                  }else{
+                    two_step_paths[[i]] <- 0
+                  }
                   rm(paths)
                 }
                 
