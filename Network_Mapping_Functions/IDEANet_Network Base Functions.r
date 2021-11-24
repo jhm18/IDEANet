@@ -2481,11 +2481,15 @@
       
         # Generating Subplot
           for(i in seq_along(plot_measures)){
+            # Eliminating NA Values
+              plot_measure <- nodes[,plot_measures[[i]]]
+              plot_measure <- plot_measure[!is.na(plot_measure)]
+            
             # Defining degree distribution coordinates
-              y_axis <- density(nodes[,plot_measures[[i]]])$y
-              x_axis <- density(nodes[,plot_measures[[i]]])$x
+              y_axis <- density(plot_measure)$y
+              x_axis <- density(plot_measure)$x
               coordinates <- cbind(as.data.frame(x_axis), y_axis)
-              coordinates <- coordinates[(coordinates$x_axis >= min(nodes[,plot_measures[[i]]])), ]
+              coordinates <- coordinates[(coordinates$x_axis >= min(plot_measure)), ]
               x_axis <- pretty(coordinates$x_axis)
               y_axis <- pretty(coordinates$y_axis)
         
