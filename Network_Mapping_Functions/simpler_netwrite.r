@@ -41,7 +41,44 @@
   #    B E T W E E N E S S    #
   #############################
   
-  # Jon is working on this
+  betweenness <- function(g, weights){
+    # Binarizing Network if Weights Used
+      if (as.logical(weights) != FALSE){
+        # Binarizing Graph: Getting Nodes
+          nodes <- as.data.frame(1:length(igraph::V(g)))
+          colnames(nodes) <- c('id')
+        
+        # Binarizing Graph: Getting edges
+          edges <- as.data.frame(igraph::as_edgelist(g, names=FALSE))
+        
+        # Creating Binarized Graph
+          b_g <- igraph::graph_from_data_frame(d = edges[c(1,2)], directed = as.logical(directed), vertices = nodes$id) 
+        
+        # Calculating Betweenness on Binarized Graph
+          b_betweenness <- igraph::betweenness(b_g, directed=as.logical(directed))
+      }else{
+        g <- g
+      }
+      
+    # Calculating Betweenness 
+      if(as.logical(weights) == FALSE){
+        betweenness <- igraph::betweenness(g, directed=as.logical(directed), weights=NULL)
+      }else{
+        betweenness <- igraph::betweenness(g, directed=as.logical(directed), 
+                                           weights = igraph::get.edge.attribute(g, "weight"))
+      }
+    
+    # Creating Output Matrix
+      if(as.logical(weights) != FALSE){
+        betweenness <- as.data.frame(cbind(b_betweenness, betweenness))
+        colnames(betweenness) <- c('binarized_betweenness', 'betweenness')
+      }else{
+        betweenness <- betweenness
+      }
+     
+    # Returning Betweenness Scores
+      return(betweenness)
+  }
   
   #################################
   #    R E A C H A B I L I T Y    #
@@ -794,7 +831,7 @@
     in_degree <- igraph::degree(g, mode='in', loops=FALSE)
     out_degree <- igraph::degree(g, mode='out', loops=FALSE)
     closeness <- closeness_igraph(g)
-    betweenness <- igraph::betweenness(g, directed=as.logical(directed))
+    betweenness_scores <- betweenness(g, weights)
     # bonpow <- igraph::bonpow(g, loops=FALSE, exponent = 0.75)
     bonpow <- bonacich_igraph(g, directed=as.logical(directed))
     #eigen_cen <- igraph::eigen_centrality(g, directed=as.logical(directed), scale=FALSE)$vector
@@ -803,7 +840,7 @@
     reachability <- reachable_igraph(g)
     
     nodes <- as.data.frame(cbind(nodes, total_degree, weighted_degree, in_degree, out_degree, 
-                                 closeness, betweenness, bonpow, eigen_cen, constraint, reachability))
+                                 closeness, betweenness_scores, bonpow, eigen_cen, constraint, reachability))
     
     return(nodes)
   }
@@ -1343,13 +1380,14 @@ adjacency_list <- F
 nodelist <- FALSE
 i_elements =  test_edgelist$ego
 j_elements = test_edgelist$alter
-weights = FALSE
+#weights = FALSE
+weights <- c(0.50, 0.75, 1.00, 0.25, 0.55, 0.45, 0.35, 0.99, 0.19, 0.05)
 directed =  TRUE
 missing_code = 99999
 type = FALSE
 net_name = 'net_1'
 package = 'network'
-weight_type='frequency'
+weight_type='distance'
 
 IDEANet_Utilities$netwrite(data_type = "edgelist",
                            adjacency_matrix <- F,
@@ -1357,7 +1395,7 @@ IDEANet_Utilities$netwrite(data_type = "edgelist",
                            nodelist <- FALSE,
                            i_elements =  test_edgelist$ego,
                            j_elements = test_edgelist$alter,
-                           weights = FALSE,
+                           weights = weights,
                            directed =  TRUE,
                            missing_code = 99999,
                            type = FALSE,
