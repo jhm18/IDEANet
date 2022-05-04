@@ -6,6 +6,7 @@
 
 # Options
   options(stringsAsFactors = FALSE)
+  options(scipen = 999)
 
 # Creating Utilities Environment
   IDEANet_Utilities = new.env()
@@ -165,13 +166,6 @@
   #    T R A N S I T I V I T Y   R A T E    #
   ###########################################
   
-  # igraph transitivity has an index problem
-  # igraph is zero-indexed, but node zero is getting higher scores because of a self-loop issue
-  # Depends on whether it needs to rely on R (1-based) or C++ (0-index)
-  # Node zero gets assigned too many alters that makes it seem more reachable.
-  
-  # Jon will take point on this
-  
   trans_rate_igraph <- function(g) {
     # Isolating One-Step Paths
       one_step_paths <- vector('list', nrow(nodes))
@@ -183,10 +177,13 @@
           one_step_paths[[i]] <- as.integer(igraph::neighborhood(g, order=1, mindist = 1, igraph::V(g)[[i]], mode='all')[[1]])
         }
       }
+      
+    # Dropping one-step paths of length 0
+      one_step_paths <- one_step_paths[(lengths(one_step_paths) > 0)]
     
     # Isolating Two-Step Paths
-      two_step_paths <- vector('list', nrow(nodes))
-      names(two_step_paths) <- nodes$id
+      two_step_paths <- vector('list', length(one_step_paths))
+      names(two_step_paths) <- names(one_step_paths)
       for(i in seq_along(two_step_paths)){
         paths <- vector('list', length(one_step_paths[[i]]))
         # If a named nodelist else an unnamed list
@@ -210,23 +207,42 @@
           if(length(paths) > 0){
             two_step_paths[[i]] <- sort(unique(unlist(paths)))
           }else{
-            two_step_paths[[i]] <- 0
+            two_step_paths[[i]] <- NULL
           }
           rm(paths)
-    }
-    
-    # Calculating the Proportion of Two-Step Path that Are Also One-Step Paths
-      proportion_two_step <- vector('numeric', length(one_step_paths))
-      for(i in seq_along(proportion_two_step)) {
-        # Identifying Nodes that Occur in Both Two and One-Step Paths
-          shared_paths <- sort(intersect(one_step_paths[[i]], two_step_paths[[i]]))
-      
-        # Identifying the proportion of nodes that occur on both paths to the number of one-step paths
-          proportion_two_step[[i]] <- length(shared_paths)/length(two_step_paths[[i]])
       }
     
+    # Eliminating Any NULL Cases (Instances where there is a one-step path but not a two-step)
+      two_step_paths[sapply(two_step_paths, is.null)] <- NULL
+      
+    # Calculating the Proportion of Two-Step Path that Are Also One-Step Paths
+      proportion_two_step <- vector('numeric', length(two_step_paths))
+      for(i in seq_along(proportion_two_step)) {
+        # Identifying node of interest
+          vertex_id <- names(two_step_paths)[[i]]
+          one_step_path <- one_step_paths[names(one_step_paths) == vertex_id][[1]]
+          two_step_path <- two_step_paths[names(two_step_paths) == vertex_id][[1]]
+        
+        # Identifying Nodes that Occur in Both Two and One-Step Paths
+          shared_paths <- sort(intersect(one_step_path, two_step_path))
+      
+        # Identifying the proportion of nodes that occur on both paths to the number of one-step paths
+          proportion_two_step[[i]] <- length(shared_paths)/length(two_step_path)
+          rm(vertex_id, one_step_path, two_step_path)
+      }
+      
+    # Creating index for the final calculation to re-incorporate the effect of isolates
+      index <- as.data.frame(nodes$id)
+      colnames(index) <- c('id')
+      results <- cbind(names(two_step_paths), as.data.frame(proportion_two_step))
+      colnames(results)[[1]] <- c('id')
+      results$id <- as.numeric(results$id)
+      index <- dplyr::left_join(index, results, by=c('id'))
+      index$proportion_two_step[is.na(index$proportion_two_step)] <- 0
+      rm(results)
+    
     # Transitivity Rate
-      transitivity_rate <- sum(proportion_two_step)/length(proportion_two_step)
+      transitivity_rate <- sum(index$proportion_two_step)/length(index$proportion_two_step)
     
     # Assigning transitivity_rate to the global environment
       assign(x = 'transitivity_rate', value = transitivity_rate,.GlobalEnv) 
@@ -1084,29 +1100,29 @@
     
     
     # Convert edgelist to data frame class and make `Obs_ID`, `i_id`, `j_id`, and `weight` numeric
-    edgelist <- as.data.frame(edgelist)
-    edgelist$Obs_ID <- as.numeric(edgelist$Obs_ID)
-    edgelist$i_id <- as.numeric(edgelist$i_id)
-    edgelist$j_id <- as.numeric(edgelist$j_id)
-    edgelist$weight <- as.numeric(edgelist$weight)
+      edgelist <- as.data.frame(edgelist)
+      edgelist$Obs_ID <- as.numeric(edgelist$Obs_ID)
+      edgelist$i_id <- as.numeric(edgelist$i_id)
+      edgelist$j_id <- as.numeric(edgelist$j_id)
+      edgelist$weight <- as.numeric(edgelist$weight)
     
     # Create graph objects
     
     # Make Zero-Indexed
-    nodes$id <- nodes$id - 1
-    edgelist[,3] <- edgelist[,3] - 1
-    edgelist[,5] <- edgelist[,5] - 1
+      nodes$id <- nodes$id - 1
+      edgelist[,3] <- edgelist[,3] - 1
+      edgelist[,5] <- edgelist[,5] - 1
     
     # Make Weights Reflect Frequency Rather than Distance
-    if(weight_type == 'frequency') {
-      edgelist[,6] <- as.numeric(1/edgelist[,6])
-    }else{
-      edgelist[,6] <- edgelist[,6]
-    }
+      if(weight_type == 'frequency') {
+        edgelist[,6] <- as.numeric(1/edgelist[,6])
+      }else{
+        edgelist[,6] <- edgelist[,6]
+      }
     
     # Creating igraph object
-    colnames(nodes)[[2]] <- c('attr')
-    g <- igraph::graph_from_data_frame(d = edgelist[,c(3,5)], directed = as.logical(directed), vertices = nodes) 
+      colnames(nodes)[[2]] <- c('attr')
+      g <- igraph::graph_from_data_frame(d = edgelist[,c(3,5)], directed = as.logical(directed), vertices = nodes) 
     
     # Adding edge weights
     igraph::edge.attributes(g)$weight <- edgelist[,6]
@@ -1403,6 +1419,30 @@ IDEANet_Utilities$netwrite(data_type = "edgelist",
                           # package = 'network',
                            weight_type='frequency')
 
+# NetExplorer Test Data (Network with Isolates)
+  test_edgelist <- read_csv("Dropbox/My Mac (Jonathan’s MacBook Pro)/Desktop/DNAC/IDEANet/Data_Scripts/NetExploration_App/test_edgelist.csv")
+  test_nodedata <- read_csv("Dropbox/My Mac (Jonathan’s MacBook Pro)/Desktop/DNAC/IDEANet/Data_Scripts/NetExploration_App/test_nodedata.csv")
+  
+  IDEANet_Utilities$netwrite(data_type = "edgelist",
+                             adjacency_matrix <- F,
+                             adjacency_list <- F,
+                             nodelist <- test_nodedata$Node,
+                             i_elements =  test_edgelist$In,
+                             j_elements = test_edgelist$Out,
+                             weights = test_edgelist$Weight,
+                             directed =  TRUE,
+                             missing_code = 99999,
+                             type = FALSE,
+                             net_name = 'net_1',
+                             # package = 'network',
+                             weight_type='frequency')
+  
+# Quickly Checking the Network
+  weights <- igraph::get.edge.attribute(net_1, "weight", igraph::E(net_1))
+  labels <- igraph::get.vertex.attribute(net_1, "name", igraph::E(net_1))
+  par(mar=c(0,0,0,0))
+  plot(net_1)
+  
 ###################################################
 #    T E S T   A D J A C E N C Y   M A T R I X    #
 ###################################################
